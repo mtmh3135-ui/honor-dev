@@ -1,0 +1,38 @@
+package models
+
+type Honor struct {
+	ID                      int64
+	CardNo                  int64
+	RegnDept                string
+	WardDesc                string
+	TxnCategory             string
+	GlAccount               string
+	CareproviderTxnDoctorId string
+	VisitNo                 string
+	PatientName             string
+	PatientType             string
+	PatientClass            string
+	TxnCode                 string
+	TxnDesc                 string
+	TxnDoctor               string
+	RegnDoctor              string
+	RefDoctor               string
+	BasePrice               float64
+	Qty                     int64
+	TxnAmount               float64
+	MarginAmount            float64
+	ClaimAmount             float64
+	DiscountVisit           float64
+	HonorMaster             float64
+	HonorProp               float64
+	HonorFinal              float64
+	TarifINACBG             float64
+	NetAmount               float64
+	Status                  string
+	HonorStatus             string
+	BillDateTime            string
+	BillStatus              string
+	OrganisationName        string
+	AdmissionDateTime       string
+	DischargeDateTime       string
+}
