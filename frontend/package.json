@@ -20,6 +20,7 @@
     "react-calendar": "^6.0.0",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.4",
+    "react-simple-typewriter": "^5.0.1",
     "recharts": "^3.3.0",
     "sweetalert2": "^11.26.3",
     "xlsx": "^0.18.5",

@@ -175,9 +175,10 @@ func GetHonorRequestDetail(c *fiber.Ctx) error {
 
 		// GET visit + txn_code details
 		visitRows, err := config.DB.Query(`
-            SELECT DISTINCT visit_no
-            FROM honor_request_detail
-            WHERE request_id = ? AND doctor_name = ?
+            SELECT DISTINCT hrdt.visit_no
+            FROM honor_request_detail_doctor hrdt
+			JOIN honor_request_detail hrd on hrdt.honor_request_detail_id = hrd.id
+            WHERE hrd.request_id = ? AND hrd.doctor_name = ?
         `, requestId, doctorName)
 
 		if err != nil {
@@ -336,14 +337,25 @@ func SubmitHonorRequest(c *fiber.Ctx) error {
 	// prepare insert detail
 	stmtInsert, err := tx.Prepare(`
         INSERT INTO honor_request_detail
-        (request_id, doctor_name, doctor_id, visit_no, total_honor)
-        VALUES (?, ?, ?, ?, ?)
+        (request_id, doctor_name, doctor_id, total_honor)
+        VALUES (?, ?, ?, ?)
     `)
 	if err != nil {
 		tx.Rollback()
 		return c.Status(500).JSON(fiber.Map{"error": "prepare insert detail: " + err.Error()})
 	}
 	defer stmtInsert.Close()
+
+	stmtInsertItems, err := tx.Prepare(`
+    	INSERT INTO honor_request_detail_doctor
+    		(honor_request_detail_id, doctor_name, visit_no, honor_final)
+    		VALUES (?, ?, ?, ?)
+		`)
+	if err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"error": "prepare insert detail items: " + err.Error()})
+	}
+	defer stmtInsertItems.Close()
 
 	// loop dokter dari payload, cari visit list di map, insert per visit
 	totalInserted := 0
@@ -362,24 +374,65 @@ func SubmitHonorRequest(c *fiber.Ctx) error {
 		} else {
 			doctorID = nil
 		}
+		// insert honor_request_detail
+		resDetail, err := stmtInsert.Exec(requestID, d.DoctorName, doctorID, d.TotalHonor)
+		if err != nil {
+			tx.Rollback()
+			return c.Status(500).JSON(fiber.Map{"error": "insert detail failed: " + err.Error()})
+		}
 
-		// Jika total honor pada payload adalah total per dokter (bukan per visit)
-		for _, v := range visits {
-			if _, err := stmtInsert.Exec(requestID, d.DoctorName, doctorID, v, d.TotalHonor); err != nil {
-				tx.Rollback()
-				return c.Status(500).JSON(fiber.Map{"error": "insert detail failed: " + err.Error()})
+		// Ambil honor_request_detail_id untuk tabel rincian
+		detailID, err := resDetail.LastInsertId()
+		if err != nil {
+			tx.Rollback()
+			return c.Status(500).JSON(fiber.Map{"error": "cannot get detail id: " + err.Error()})
+		}
+
+		// Loop semua visit dokter ini
+		for _, visit := range visits {
+			// Ambil honor_final per visit dari patient_bill
+			var honorFinal sql.NullFloat64
+			err := tx.QueryRow(`
+        	SELECT honor_final
+        	FROM patient_bill
+        	WHERE visit_no_fix = ?
+          	AND LOWER(txn_doctor) = LOWER(?)
+        	LIMIT 1
+    	`, visit, d.DoctorName).Scan(&honorFinal)
+
+			if err != nil {
+				// Tetap lanjut; honor_final mungkin tidak ada
+				log.Println("Warning: honor_final not found for visit", visit, "doctor", d.DoctorName)
+				continue
 			}
+
+			// Insert ke tabel rincian
+			_, err = stmtInsertItems.Exec(
+				detailID,
+				d.DoctorName,
+				visit,
+				honorFinal.Float64,
+			)
+			if err != nil {
+				tx.Rollback()
+				return c.Status(500).JSON(fiber.Map{"error": "insert detail item failed: " + err.Error()})
+			}
+
 			totalInserted++
 		}
+
 	}
 
 	// Update patient_bill
 	_, err = tx.Exec(`
-        UPDATE patient_bill pb
-        JOIN honor_request_detail hrd ON pb.visit_no_fix = hrd.visit_no
-        SET pb.honor_status = 'ON_PROGRESS'
-        WHERE hrd.request_id = ?
-    `, requestID)
+	    UPDATE patient_bill pb
+	JOIN honor_request_detail_doctor hrd 
+      ON pb.visit_no_fix = hrd.visit_no
+	JOIN honor_request_detail hrdt
+      ON hrd.honor_request_detail_id = hrdt.id
+	SET pb.honor_status = 'ON_PROGRESS'
+	WHERE hrdt.request_id = ?
+	`, requestID)
 
 	if err != nil {
 		tx.Rollback()
@@ -467,10 +520,13 @@ func ApproveLevel2(c *fiber.Ctx) error {
 
 	// Update patient_bill
 	_, err = tx.Exec(`
-        UPDATE patient_bill pb
-        JOIN honor_request_detail hrd ON pb.visit_no_fix = hrd.visit_no
-        SET pb.honor_status = 'APPROVED'
-        WHERE hrd.request_id = ?
+         UPDATE patient_bill pb
+	JOIN honor_request_detail_doctor hrd 
+      ON pb.visit_no_fix = hrd.visit_no
+	JOIN honor_request_detail hrdt
+      ON hrd.honor_request_detail_id = hrdt.id
+	SET pb.honor_status = 'APPROVED'
+	WHERE hrdt.request_id = ?
     `, id)
 
 	if err != nil {
@@ -493,11 +549,13 @@ func CancelHonorRequest(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "failed to start transaction"})
 	}
 
-	// 1. Ambil semua visit_no dalam request detail
+	// 1. Ambil semua visit_no dalam request detail doctor
 	rows, err := tx.Query(`
-        SELECT visit_no 
-        FROM honor_request_detail 
-        WHERE request_id = ?`,
+        SELECT hrd.visit_no 
+        FROM honor_request_detail_doctor hrd
+		JOIN honor_request_detail hrdt
+      	 	ON hrd.honor_request_detail_id = hrdt.id
+        WHERE hrdt.request_id = ?`,
 		requestId)
 	if err != nil {
 		tx.Rollback()
@@ -569,9 +627,11 @@ func RejectHonorRequest(c *fiber.Ctx) error {
 
 	// 1. Ambil semua visit_no dalam request detail
 	rows, err := tx.Query(`
-        SELECT visit_no 
-        FROM honor_request_detail 
-        WHERE request_id = ?`,
+        SELECT hrd.visit_no 
+        FROM honor_request_detail_doctor hrd
+		JOIN honor_request_detail hrdt
+      	 	ON hrd.honor_request_detail_id = hrdt.id
+        WHERE hrdt.request_id = ?`,
 		requestId)
 	if err != nil {
 		tx.Rollback()

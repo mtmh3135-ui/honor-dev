@@ -65,6 +65,8 @@ func main() {
 	api.Post("/honor-count", handlers.HonorCount(config.DB))
 	api.Get("/get-honor-data", handlers.GetHonor(config.DB))
 	api.Get("/get-doctor-honor", handlers.GetDoctorHonor(config.DB))
+	api.Get("/get-doctor-honor-monthly", handlers.GetDoctorHonorMonthly(config.DB))
+	api.Get("/honor-chart", handlers.GetHonorChart(config.DB))
 
 	// Handling Users
 	api.Get("/users", handlers.GetUsers)

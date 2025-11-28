@@ -259,9 +259,7 @@ export default function RequestList() {
                             <span className="text-red-600">Rejected</span>
                           )}
                           {row.status == "Cancelled" && (
-                            <span className="text-red-600">
-                              Cancelled by wianto
-                            </span>
+                            <span className="text-red-600">Cancelled</span>
                           )}
                         </td>
                         <td className="p-3">{row.username}</td>

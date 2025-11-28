@@ -268,8 +268,113 @@ func GetDoctorHonor(db *sql.DB) fiber.Handler {
 		log.Printf("Total Dokter: %d", len(result))
 
 		return c.JSON(fiber.Map{
+
 			"total_dokter": len(result),
 			"data":         result,
+		})
+	}
+}
+
+func GetDoctorHonorMonthly(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		doctorName := c.Query("txn_doctor")
+		month := c.Query("month")
+		year := c.Query("year")
+
+		if year == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "year is required"})
+		}
+
+		// ambil query pagination
+		pageStr := c.Query("page", "1") // default halaman 1
+		limitStr := c.Query("limit", "10")
+
+		page, err := strconv.Atoi(pageStr)
+		if err != nil || page < 1 {
+			page = 1
+		}
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil || limit < 1 {
+			limit = 10
+		}
+		offset := (page - 1) * limit
+
+		query := `
+            SELECT 
+                hrd.doctor_name,
+                SUM(hrd.total_honor) AS total_honor				
+            FROM honor_request_detail hrd
+            JOIN honor_request hr ON hrd.request_id = hr.id
+            WHERE YEAR(hr.approved_lvl2) = ?
+        `
+
+		args := []interface{}{year}
+
+		// Jika bulan dipilih
+		if month != "" {
+			query += " AND MONTH(approved_lvl2) = ?"
+			args = append(args, month)
+		}
+
+		// Jika nama dokter dipilih
+		if doctorName != "" {
+			query += " AND doctor_name LIKE ?"
+			args = append(args, "%"+doctorName+"%")
+		}
+
+		query += `
+            AND hr.status = 'APPROVED'			
+            GROUP BY hrd.doctor_name
+            ORDER BY total_honor DESC
+        `
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, limit, offset)
+
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			log.Println(err)
+			return c.Status(500).JSON(fiber.Map{"error": "query error"})
+		}
+		defer rows.Close()
+
+		var result []fiber.Map
+
+		for rows.Next() {
+			var doctor string
+			var total float64
+			rows.Scan(&doctor, &total)
+
+			result = append(result, fiber.Map{
+				"DoctorName": doctor,
+				"TotalHonor": total,
+			})
+		}
+
+		// ambil total data (tanpa limit)
+		countQuery := `SELECT COUNT(*) FROM honor_request_detail hrd JOIN honor_request hr ON hrd.request_id = hr.id WHERE 1=1`
+		countArgs := []interface{}{}
+		// Jika bulan dipilih
+		if month != "" {
+			countQuery += " AND MONTH(approved_lvl2) = ?"
+			countArgs = append(countArgs, month)
+		}
+
+		// Jika nama dokter dipilih
+		if doctorName != "" {
+			countQuery += " AND doctor_name LIKE ?"
+			countArgs = append(countArgs, "%"+doctorName+"%")
+		}
+
+		var total int
+		if err := db.QueryRow(countQuery, countArgs...).Scan(&total); err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(fiber.Map{
+			"page":       page,
+			"limit":      limit,
+			"total":      total,
+			"totalPages": (total + limit - 1) / limit,
+			"data":       result,
 		})
 	}
 }
@@ -613,7 +718,7 @@ func HonorCount(db *sql.DB) fiber.Handler {
 					}
 					if tx.TxnType == "visit" && !visittindakan[tx.VisitNo] {
 						tx.TxnType = "fix"
-						log.Println("di satu sep kan ke yang punya honor tipe visit")
+						log.Println("di satu sep kan ")
 					}
 				}
 				// log.Printf("Limit Baru:%v", limit)
@@ -871,6 +976,79 @@ func HonorCount(db *sql.DB) fiber.Handler {
 
 		log.Println("✅ Proses perhitungan honor selesai.")
 		return nil
+	}
+}
+
+// Chart Pada Dashboard
+func GetHonorChart(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		doctorName := c.Query("doctor_name")
+		year := c.Query("year")
+		if year == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "year is required"})
+		}
+
+		// 🔥 Base query
+		query := `
+			SELECT 
+				MONTH(hrd.created_at) AS bulan,
+				SUM(hrd.total_honor) AS total
+				FROM honor_request_detail hrd
+				JOIN honor_request hr ON hrd.request_id = hr.id
+			WHERE YEAR(hrd.created_at) = ? 
+		`
+
+		args := []interface{}{year}
+
+		// 🔥 Jika dokter diberikan → filter
+		if doctorName != "" {
+			// log.Printf("Dokter:%s", doctorName)
+			query += " AND doctor_name LIKE ?"
+			args = append(args, "%"+doctorName+"%")
+		}
+
+		query += `			
+			AND hr.status = 'APPROVED' 
+			GROUP BY MONTH(created_at)
+			ORDER BY bulan ASC
+		`
+
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			log.Printf("query error: %v", err)
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+		defer rows.Close()
+
+		monthlyData := make(map[int]float64)
+		for rows.Next() {
+			var month int
+			var total float64
+			if err := rows.Scan(&month, &total); err != nil {
+				log.Printf("scan error: %v", err)
+				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+			}
+			monthlyData[month] = total
+		}
+
+		monthNames := []string{
+			"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+			"Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+		}
+
+		var result []fiber.Map
+		for i := 1; i <= 12; i++ {
+			result = append(result, fiber.Map{
+				"month": monthNames[i-1],
+				"Total": monthlyData[i], // default 0
+			})
+		}
+
+		return c.JSON(fiber.Map{
+			"filter_doctor": doctorName,
+			"year":          year,
+			"monthlyHonor":  result,
+		})
 	}
 }
 
