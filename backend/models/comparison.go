@@ -5,4 +5,5 @@ type ComparisonData struct {
 	Status            string
 	VisitNumberTujuan string
 	TarifINACBG       float64
+	TarifBeforeTopup  float64
 }

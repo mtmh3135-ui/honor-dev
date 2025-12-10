@@ -57,16 +57,21 @@ func main() {
 	// Handling Master Doctor
 	api.Post("/upload-doctor", handlers.HandleUploaddoctordata)
 	api.Get("/get-doctor-data", handlers.GetDoctor(config.DB))
+	api.Get("/get-doctor-list", handlers.GetDoctorList(config.DB))
 	api.Post("/create-doctor", handlers.CreateDoctor(config.DB))
 	api.Put("/update-doctor/:id", handlers.UpdateDoctor(config.DB))
 	api.Delete("/delete-doctor/:id", handlers.DeleteDoctor(config.DB))
 
 	// Handling Honor
-	api.Post("/honor-count", handlers.HonorCount(config.DB))
+	api.Post("/honor-count", handlers.HonorCountPatientBill(config.DB))
 	api.Get("/get-honor-data", handlers.GetHonor(config.DB))
 	api.Get("/get-doctor-honor", handlers.GetDoctorHonor(config.DB))
 	api.Get("/get-doctor-honor-monthly", handlers.GetDoctorHonorMonthly(config.DB))
+	api.Post("/add-honor-adjustment", handlers.AddHonorAdjustment(config.DB))
 	api.Get("/honor-chart", handlers.GetHonorChart(config.DB))
+
+	// Handling Update Billing
+	api.Get("/get-update-billing", handlers.GetUpdateBillingData(config.DB))
 
 	// Handling Users
 	api.Get("/users", handlers.GetUsers)
@@ -82,6 +87,7 @@ func main() {
 	api.Put("/honor-request/reject/:id", handlers.RejectHonorRequest)
 	api.Put("/honor/approve/1/:id", handlers.ApproveLevel1)
 	api.Put("/honor/approve/2/:id", handlers.ApproveLevel2)
+	api.Put("/honor/approve/3/:id", handlers.ApproveLevel3)
 
 	// //API FRONTEND
 	// // Serve file static (CSS, JS, gambar)

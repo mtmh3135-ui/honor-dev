@@ -36,7 +36,7 @@ const Topbar: React.FC = () => {
   };
 
   return (
-    <header className="fixed top-0 left-64 right-2 h-16 flex justify-between items-center bg-white shadow z-20 rounded-xl ml-5 mt-2">
+    <header className="fixed top-0 left-64 right-2 h-16 flex justify-between items-center bg-white shadow-lg z-20 rounded-xl ml-7 mt-3">
       <div className="justify-items-star felx items-center">
         <img src={logo} alt="" className="w-20 ml-2" />
       </div>
@@ -47,7 +47,7 @@ const Topbar: React.FC = () => {
         <div className="relative inline-block text-left" ref={dropdownRef}>
           <button
             onClick={() => setOpen(!open)}
-            className="inline-flex items-center px-2 py-2 mr-2 bg-transparent text-black rounded-xl  transition hover:outline-none hover:ring-0 focus:outline-none focus:ring-0"
+            className="inline-flex items-center px-2 py-2 mr-2 bg-transparent text-black rounded-xl  transition hover:border-transparent focus:outline-none focus:ring-0"
           >
             <ChevronDown className=" w-4 h-4" />
           </button>
@@ -59,14 +59,14 @@ const Topbar: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.15 }}
-                className="absolute right-0 mt-4 w-36 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20"
+                className="absolute right-0 mt-5 bg-white rounded-xl shadow-lg ring-1 ring-black/5 z-20"
               >
                 <button
                   onClick={handleLogout}
-                  className="flex items-center w-full px-4 py-5 rounded-xl text-sm font-medium text-gray-500 bg-transparent hover:bg-red-500 hover:text-black transition"
+                  className="flex items-center gap-1 h-5 w-full px-4 py-5 rounded-xl text-sm font-medium text-gray-500 focus:outline-none  hover:border-transparent bg-transparent hover:bg-red-600 hover:text-black transition"
                 >
                   <LogOut className="w-4 h-4" />
-                  Logout
+                  <span>Log</span> <span>out</span>
                 </button>
               </motion.div>
             )}

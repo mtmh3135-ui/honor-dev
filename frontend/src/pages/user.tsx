@@ -34,7 +34,7 @@ export default function UserManagement() {
     Role: "",
     Password: "",
   };
-  const Roles = ["Admin", "User", "Approver_1", "Approver_2"];
+  const Roles = ["Admin", "User", "Approver_1", "Approver_2", "Approver_3"];
   const [editData, setEditData] = useState<User>(emptyUser);
   const [showEdit, setShowEdit] = useState(false);
   // ✅ Ambil data user
@@ -217,6 +217,7 @@ export default function UserManagement() {
 
             <input
               className="border px-3 py-2 w-full mb-3 bg-transparent text-gray-500"
+              placeholder="Password"
               value={editData.Password}
               onChange={(e) =>
                 setEditData({ ...editData, Password: e.target.value })

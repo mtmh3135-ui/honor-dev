@@ -15,7 +15,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/mtmh3135/honor/backend/helpers"
 	"github.com/mtmh3135/honor/backend/models"
-	"github.com/mtmh3135/honor/backend/processor"
 )
 
 // GET /api/comparison
@@ -39,7 +38,7 @@ func GetComparison(db *sql.DB) fiber.Handler {
 		}
 		offset := (page - 1) * limit
 
-		query := `SELECT visit_number,status,visit_number_tujuan,tarif_ina_cbg FROM comparison_data WHERE 1=1`
+		query := `SELECT visit_number,status,IFNULL(visit_number_tujuan,'-')AS visit_number_tujuan,tarif_ina_cbg, IFNULL(tarif_sebelum_topup,'0') AS tarif_before_topup FROM comparison_data WHERE 1=1`
 		args := []interface{}{}
 
 		// hanya tambahkan filter jika user mengisi
@@ -65,7 +64,7 @@ func GetComparison(db *sql.DB) fiber.Handler {
 		var comparisondatas []models.ComparisonData
 		for rows.Next() {
 			var p models.ComparisonData
-			if err := rows.Scan(&p.VisitNumber, &p.Status, &p.VisitNumberTujuan, &p.TarifINACBG); err != nil {
+			if err := rows.Scan(&p.VisitNumber, &p.Status, &p.VisitNumberTujuan, &p.TarifINACBG, &p.TarifBeforeTopup); err != nil {
 				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 			}
 			comparisondatas = append(comparisondatas, p)
@@ -118,8 +117,6 @@ func UploadChunks(c *fiber.Ctx) error {
 		return c.Status(500).SendString("save failed")
 	}
 	return c.SendStatus(200)
-	// simpan log aktivitas
-
 }
 
 func UploadCompletes(c *fiber.Ctx) error {
@@ -175,7 +172,7 @@ func UploadCompletes(c *fiber.Ctx) error {
 	}
 
 	// Proses file di background
-	if err := processor.ComparisonDataUp(bytes.NewReader(data)); err != nil {
+	if err := ComparisonDataUp(bytes.NewReader(data)); err != nil {
 		log.Println("process error:", err)
 		return c.Status(400).JSON(fiber.Map{
 			"status":  "error",

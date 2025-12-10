@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { Search, ChevronDown, FileDown } from "lucide-react";
 import Swal from "sweetalert2";
@@ -29,7 +29,8 @@ export default function HonorDokter() {
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isOpena, setIsOpena] = useState(false);
-
+  const monthRef = useRef<HTMLDivElement>(null);
+  const yearRef = useRef<HTMLDivElement>(null);
   const currentYear = new Date().getFullYear();
   const years = [currentYear, currentYear + 1];
 
@@ -165,8 +166,25 @@ export default function HonorDokter() {
   };
 
   const handleSubmitRequest = async () => {
+    if (!selectedMonth || !selectedYear) {
+      Swal.fire("Oops!", "Pilih bulan dan tahun terlebih dahulu!", "warning");
+      return;
+    }
     if (data.length === 0) {
       Swal.fire("Oops!", "Tidak ada data untuk disubmit.", "warning");
+      return;
+    }
+    const invalid = data.some(
+      (item: any) =>
+        item.CountedMonth !== selectedMonth || item.CountedYear !== selectedYear
+    );
+
+    if (invalid) {
+      Swal.fire(
+        "Error",
+        "Data honor tidak sesuai dengan bulan/tahun yang dipilih.",
+        "error"
+      );
       return;
     }
     setLoading(true);
@@ -174,13 +192,15 @@ export default function HonorDokter() {
       await axios.post(
         "http://localhost:8080/api/honor/submit-request",
         {
-          counted_month: filters.counted_month,
-          counted_year: filters.counted_year,
+          counted_month: selectedMonth,
+          counted_year: selectedYear,
           data,
         },
         { withCredentials: true }
       );
       Swal.fire("Berhasil!", "Permohonan berhasil dikirim.", "success");
+      fetchData();
+      setTimeout(() => setLoading(false), 200);
     } catch (err: any) {
       setLoading(false);
       Swal.fire(
@@ -192,7 +212,19 @@ export default function HonorDokter() {
       setLoading(false);
     }
   };
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (monthRef.current && !monthRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+      if (yearRef.current && !yearRef.current.contains(e.target as Node)) {
+        setIsOpena(false);
+      }
+    }
 
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   return (
     <>
       {loading && (
@@ -249,7 +281,7 @@ export default function HonorDokter() {
               />
 
               {/* Month Dropdown */}
-              <div className="relative w-52">
+              <div className="relative w-52" ref={monthRef}>
                 <button
                   type="button"
                   onClick={() => setIsOpen(!isOpen)}
@@ -297,7 +329,7 @@ export default function HonorDokter() {
               </div>
 
               {/* Year Dropdown */}
-              <div className="relative w-52">
+              <div className="relative w-52" ref={yearRef}>
                 <button
                   type="button"
                   onClick={() => setIsOpena(!isOpena)}
@@ -341,21 +373,21 @@ export default function HonorDokter() {
             <div className="flex justify-between gap-2">
               <button
                 onClick={handleSubmitRequest}
-                className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-5 py-2.5 rounded-xl shadow hover:scale-105 transition"
+                className="flex items-center gap-2 bg-gradient-to-r focus:outline-none hover:border-transparent from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
               >
                 Submit Data Honor
               </button>
 
               <button
                 onClick={exportToExcel}
-                className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
+                className="flex items-center gap-2 bg-gradient-to-r focus:outline-none hover:border-transparent from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
               >
                 <FileDown className="w-4 h-4" /> Export
               </button>
 
               <button
                 onClick={handleSearch}
-                className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
+                className="flex items-center gap-2 bg-gradient-to-r focus:outline-none hover:border-transparent from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
               >
                 <Search className="w-4 h-4" /> Search
               </button>

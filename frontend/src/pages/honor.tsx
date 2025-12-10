@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/rules-of-hooks */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import {
   Search,
@@ -22,6 +22,7 @@ interface Honor {
   GlAccount: string;
   CareproviderTxnDoctorId: number;
   VisitNo: string;
+  VisitNoFix: string;
   PatientName: string;
   PatientType: string;
   PatientClass: string;
@@ -54,10 +55,43 @@ export default function Honor() {
   const [totaldata, settotaldata] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
-  const [filters, setFilters] = useState({
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const monthRef = useRef<HTMLDivElement>(null);
+  const yearRef = useRef<HTMLDivElement>(null);
+  const [isOpena, setIsOpena] = useState(false);
+  const [isOpenb, setIsOpenb] = useState(false);
+  const months = [
+    { label: "Januari", value: 1 },
+    { label: "Februari", value: 2 },
+    { label: "Maret", value: 3 },
+    { label: "April", value: 4 },
+    { label: "Mei", value: 5 },
+    { label: "Juni", value: 6 },
+    { label: "Juli", value: 7 },
+    { label: "Agustus", value: 8 },
+    { label: "September", value: 9 },
+    { label: "Oktober", value: 10 },
+    { label: "November", value: 11 },
+    { label: "Desember", value: 12 },
+  ];
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 4 }, (_, i) => currentYear - i);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const [filters, setFilters] = useState<{
+    visit_no: string;
+    visit_no_fix: string;
+    patient_name: string;
+    patient_class: string;
+    counted_month: number | null;
+    counted_year: number | null;
+  }>({
     visit_no: "",
+    visit_no_fix: "",
     patient_name: "",
     patient_class: "",
+    counted_month: null,
+    counted_year: currentYear,
   });
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -140,6 +174,7 @@ export default function Honor() {
         "Card No": item.CardNo,
         "Patient Type": item.PatientType,
         "Visit No": item.VisitNo,
+        "Visit No Fix": item.VisitNoFix,
         "Regn Dept": item.RegnDept,
         "Ward Desc": item.WardDesc,
         "Patient Class": item.PatientClass,
@@ -182,8 +217,8 @@ export default function Honor() {
         const cell = worksheet[cellAddress];
         if (!cell) return;
         cell.s = {
-          fill: { fgColor: { rgb: "C6EFCE" } }, // Hijau muda
-          font: { bold: true, color: { rgb: "006100" } }, // Tulisan hijau tua
+          fill: { fgColor: { rgb: "C6EFCE" } },
+          font: { bold: true, color: { rgb: "006100" } },
           alignment: { horizontal: "center", vertical: "center" },
           border: {
             top: { style: "thin", color: { rgb: "006100" } },
@@ -221,6 +256,25 @@ export default function Honor() {
       Swal.fire("Error", "Gagal mengambil data untuk export.", "error");
     }
   };
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (monthRef.current && !monthRef.current.contains(e.target as Node)) {
+        setIsOpenb(false);
+      }
+      if (yearRef.current && !yearRef.current.contains(e.target as Node)) {
+        setIsOpena(false);
+      }
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <>
@@ -268,7 +322,7 @@ export default function Honor() {
           </div>
 
           <div className="w-[50%] text-gray-600">
-            <span className="text-yellow-400 text-lg animate-pulse drop-shadow-[0_0_10px_rgba(250,204,21,1)]">
+            <span className="text-yellow-400 text-lg animate-pulse drop-shadow-[0_0_20px_rgba(250,204,21,1)]">
               Pastikan Data Patient Bill & Data Perbandingan Updated !
             </span>
           </div>
@@ -276,8 +330,8 @@ export default function Honor() {
             <button
               onClick={honorcount}
               disabled={loading}
-              className={`px-4 py-2 rounded-xl text-white font-semibold ${
-                loading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
+              className={`px-4 py-2 rounded-xl hover:border-transparent focus:outline-none bg-blue-600 text-white font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200${
+                loading ? "bg-gray-400" : " hover:bg-blue-700"
               }`}
             >
               {loading ? "Menghitung..." : "Hitung Honor"}
@@ -291,97 +345,192 @@ export default function Honor() {
             🔍 Filter
           </h2>
 
-          <div className="flex flex-wrap gap-4 items-center justify-between text-gray-600">
-            {/* Input Filters */}
-            <div className="flex flex-wrap gap-4 items-center">
-              <input
-                placeholder="Visit Number..."
-                value={filters.visit_no}
-                onChange={(e) =>
-                  setFilters({ ...filters, visit_no: e.target.value })
-                }
-                className="border border-gray-300 focus:ring-2 focus:ring-green-400 p-2 rounded-xl w-60 bg-white/70 backdrop-blur-sm placeholder-gray-400 focus:outline-none"
-              />
-              <input
-                placeholder="Patient Name..."
-                value={filters.patient_name}
-                onChange={(e) =>
-                  setFilters({ ...filters, patient_name: e.target.value })
-                }
-                className="border border-gray-300 focus:ring-2 focus:ring-green-400 p-2 rounded-xl w-60 bg-white/70 backdrop-blur-sm placeholder-gray-400 focus:outline-none"
-              />
-              <div className="relative w-52 ">
-                {/* Selected Box */}
-                <button
-                  type="button"
-                  onClick={() => setIsOpen(!isOpen)}
-                  className={`w-full flex items-center justify-between px-4 py-2 border border-gray-300 rounded-xl 
+          {/* Input Filters */}
+          <div className="flex flex-wrap gap-5 items-center text-gray-500">
+            <input
+              placeholder="Visit Number..."
+              value={filters.visit_no}
+              onChange={(e) =>
+                setFilters({ ...filters, visit_no: e.target.value })
+              }
+              className="border border-gray-300 focus:ring-2 focus:ring-green-400 p-2 rounded-xl w-60 bg-white/70 backdrop-blur-sm placeholder-gray-400 focus:outline-none"
+            />
+            <input
+              placeholder="Visit Number SEP..."
+              value={filters.visit_no_fix}
+              onChange={(e) =>
+                setFilters({ ...filters, visit_no_fix: e.target.value })
+              }
+              className="border border-gray-300 focus:ring-2 focus:ring-green-400 p-2 rounded-xl w-60 bg-white/70 backdrop-blur-sm placeholder-gray-400 focus:outline-none"
+            />
+
+            <input
+              placeholder="Patient Name..."
+              value={filters.patient_name}
+              onChange={(e) =>
+                setFilters({ ...filters, patient_name: e.target.value })
+              }
+              className="border border-gray-300 focus:ring-2 focus:ring-green-400 p-2 rounded-xl w-60 bg-white/70 backdrop-blur-sm placeholder-gray-400 focus:outline-none"
+            />
+            <div className="relative w-52 " ref={dropdownRef}>
+              {/* Selected Box */}
+              <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className={`w-full flex items-center justify-between px-4 py-2 border border-gray-300 rounded-xl 
              bg-white text-gray-700 shadow-sm transition-all duration-300 
             hover:border-green-400 focus:ring-2 focus:ring-green-300 focus:outline-none
              ${isOpen ? "ring-2 ring-green-300" : ""}`}
-                >
-                  <span>
-                    {selected ? (
-                      selected
-                    ) : (
-                      <span className="text-gray-400">Patient Class</span>
-                    )}
-                  </span>
-                  <ChevronDown
-                    size={18}
-                    className={`transition-transform duration-300 ${
-                      isOpen ? "rotate-180 text-green-500" : "text-gray-400"
-                    }`}
-                  />
-                </button>
+              >
+                <span>
+                  {selected ? (
+                    selected
+                  ) : (
+                    <span className="text-gray-400">Patient Class</span>
+                  )}
+                </span>
+                <ChevronDown
+                  size={18}
+                  className={`transition-transform duration-300 ${
+                    isOpen ? "rotate-180 text-green-500" : "text-gray-400"
+                  }`}
+                />
+              </button>
 
-                {/* Dropdown Menu */}
-                {isOpen && (
-                  <div
-                    className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg 
+              {/* Dropdown Menu */}
+              {isOpen && (
+                <div
+                  className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg 
             animate-fadeIn backdrop-blur-md"
-                  >
-                    {options.map((opt) => (
-                      <div
-                        key={opt}
-                        onClick={() => {
-                          setSelected(opt);
-                          setFilters({
-                            ...filters,
-                            patient_class: opt === "All" ? "" : opt,
-                          });
-                          setIsOpen(false);
-                        }}
-                        className={`px-4 py-2 cursor-pointer transition-all duration-200 
+                >
+                  {options.map((opt) => (
+                    <div
+                      key={opt}
+                      onClick={() => {
+                        setSelected(opt);
+                        setFilters({
+                          ...filters,
+                          patient_class: opt === "All" ? "" : opt,
+                        });
+                        setIsOpen(false);
+                      }}
+                      className={`px-4 py-2 cursor-pointer transition-all duration-200 
               hover:bg-green-50 hover:text-green-600 ${
                 selected === opt
                   ? "bg-green-100 text-green-700 font-semibold"
                   : ""
               }`}
-                      >
-                        {opt}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    >
+                      {opt}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="flex justify-between gap-2">
+            {/* Month Dropdown */}
+            <div className="relative w-52" ref={monthRef}>
               <button
-                onClick={exportToExcel}
-                className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
+                type="button"
+                onClick={() => setIsOpenb(!isOpenb)}
+                className={`w-full flex items-center justify-between px-4 py-2 border border-gray-300 rounded-xl 
+                           bg-white text-gray-700 shadow-sm transition-all duration-300 hover:border-green-400 focus:ring-2 focus:ring-green-300 focus:outline-none
+                           ${isOpenb ? "ring-2 ring-green-300" : ""}`}
               >
-                <FileDown className="w-4 h-4" />
-                Export
+                <span className="text-gray-400">
+                  {selectedMonth
+                    ? months.find((m) => m.value === selectedMonth)?.label
+                    : "Month"}
+                </span>
+                <ChevronDown
+                  size={18}
+                  className={`transition-transform duration-300 ${
+                    isOpenb ? "rotate-180 text-green-500" : "text-gray-400"
+                  }`}
+                />
               </button>
-              <button
-                onClick={handleSearch}
-                className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
-              >
-                <Search className="w-4 h-4" />
-                Search
-              </button>
+
+              {isOpenb && (
+                <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg animate-fadeIn backdrop-blur-md">
+                  {months.map((month) => (
+                    <div
+                      key={month.value}
+                      onClick={() => {
+                        setSelectedMonth(month.value);
+                        setFilters({
+                          ...filters,
+                          counted_month: month.value,
+                        });
+                        setIsOpenb(false);
+                      }}
+                      className={`px-4 py-2 cursor-pointer transition-all duration-200 hover:bg-green-50 hover:text-green-600 ${
+                        selectedMonth === month.value
+                          ? "bg-green-100 text-green-700 font-semibold"
+                          : ""
+                      }`}
+                    >
+                      {month.label}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+
+            {/* Year Dropdown */}
+            <div className="relative w-52" ref={yearRef}>
+              <button
+                type="button"
+                onClick={() => setIsOpena(!isOpena)}
+                className={`w-full flex items-center justify-between px-4 py-2 border border-gray-300 rounded-xl 
+                           bg-white text-gray-700 shadow-sm transition-all duration-300 hover:border-green-400 focus:ring-2 focus:ring-green-300 focus:outline-none
+                           ${isOpena ? "ring-2 ring-green-300" : ""}`}
+              >
+                <span className="text-gray-400">{selectedYear || "Year"}</span>
+                <ChevronDown
+                  size={18}
+                  className={`transition-transform duration-300 ${
+                    isOpena ? "rotate-180 text-green-500" : "text-gray-400"
+                  }`}
+                />
+              </button>
+
+              {isOpena && (
+                <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg animate-fadeIn backdrop-blur-md">
+                  {years.map((year) => (
+                    <div
+                      key={year}
+                      onClick={() => {
+                        setSelectedYear(year);
+                        setFilters({ ...filters, counted_year: year });
+                        setIsOpena(false);
+                      }}
+                      className={`px-4 py-2 cursor-pointer transition-all duration-200 hover:bg-green-50 hover:text-green-600 ${
+                        selectedYear === year
+                          ? "bg-green-100 text-green-700 font-semibold"
+                          : ""
+                      }`}
+                    >
+                      {year}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-2">
+            <button
+              onClick={exportToExcel}
+              className="flex items-center hover:border-transparent focus:outline-none gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
+            >
+              <FileDown className="w-4 h-4" />
+              Export
+            </button>
+            <button
+              onClick={handleSearch}
+              className="flex items-center hover:border-transparent focus:outline-none gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
+            >
+              <Search className="w-4 h-4" />
+              Search
+            </button>
           </div>
         </div>
 
@@ -484,13 +633,13 @@ export default function Honor() {
             <div className="text-sm text-gray-400">
               Jumlah Data: {totaldata.toLocaleString("id-ID")}
             </div>
-            <div className="flex items-center gap-2 focus:outline-none focus:ring-0 focus:ring-offset-0 ">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => {
                   if (currentPage > 1) fetchData(currentPage - 1);
                 }}
                 disabled={currentPage <= 1}
-                className="px-3  rounded-lg bg-transparent text-gray-500 hover:text-gray-700 disabled:opacity-40 transition-all"
+                className="px-3 rounded-lg bg-transparent text-gray-500 hover:text-gray-700 hover:border-transparent disabled:opacity-40 transition-all focus:outline-none focus:ring-0 outline-none hover:outline-none"
               >
                 <ChevronLeft />
               </button>
@@ -512,8 +661,8 @@ export default function Honor() {
                       onClick={() => fetchData(page)}
                       className={`px-3  rounded-lg transition-all ${
                         currentPage === page
-                          ? "text-green-400 bg-transparent"
-                          : "text-gray-400 hover:text-gray-500 bg-transparent "
+                          ? "text-green-400 bg-transparent focus:outline-none focus:ring-0 hover:border-transparent outline-none"
+                          : "text-gray-400 hover:text-gray-500 bg-transparent hover:border-transparent "
                       }`}
                     >
                       {page}
@@ -527,7 +676,7 @@ export default function Honor() {
                   if (currentPage < totalPages) fetchData(currentPage + 1);
                 }}
                 disabled={currentPage >= totalPages}
-                className="px-3  rounded-lg bg-transparent text-gray-500 hover:text-gray-700 disabled:opacity-40 transition-all"
+                className="px-3 focus:outline-none focus:ring-0 rounded-lg hover:border-transparent bg-transparent text-gray-500 hover:text-gray-700 disabled:opacity-40 transition-all"
               >
                 <ChevronRight />
               </button>

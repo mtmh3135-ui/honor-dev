@@ -9,6 +9,7 @@ type Honor struct {
 	GlAccount               string
 	CareproviderTxnDoctorId string
 	VisitNo                 string
+	VisitNoFix              string
 	PatientName             string
 	PatientType             string
 	PatientClass            string

@@ -15,6 +15,7 @@ import Swal from "sweetalert2";
 import AisData from "./pages/piutang";
 import RequestList from "./pages/honor request";
 import HonorRequestDetail from "./pages/honor detail";
+import UpdateBilling from "./pages/updatebilling";
 
 // Atur konfigurasi default agar tidak ubah layout
 Swal.mixin({
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="patient-bill" element={<PatientBill />} />
         <Route path="comparison" element={<DataPerbandingan />} />
+        <Route path="adjustment" element={<UpdateBilling />} />
         <Route path="master-txn" element={<Mastertxn />} />
         <Route path="master-doctor" element={<Masterdoctor />} />
         <Route path="request-list" element={<RequestList />} />

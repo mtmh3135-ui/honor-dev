@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   FileText,
-  BarChart2,
   BadgeDollarSign,
   ShieldUser,
   Cog,
@@ -31,45 +30,73 @@ const menuItems: MenuItem[] = [
     label: "Dashboard",
     icon: <LayoutDashboard className="w-5 h-5" />,
     path: "/dashboard",
-    allowedRoles: ["Admin", "User", "Approver_1", "Approver_2"],
+    allowedRoles: ["Admin", "User", "Approver_1", "Approver_2", "Approver_3"],
   },
   {
-    label: "Patient Bill",
+    label: "Data",
     icon: <FileText className="w-5 h-5" />,
-    path: "/patient-bill",
-    allowedRoles: ["Admin", "User", "Approver_1", "Approver_2"],
+    allowedRoles: ["Admin", "User"],
+    children: [
+      {
+        label: "Patient Bill",
+        path: "/patient-bill",
+        allowedRoles: ["Admin", "User"],
+      },
+      {
+        label: "Data Piutang",
+        path: "/data-piutang",
+        allowedRoles: ["Admin", "User"],
+      },
+      {
+        label: "Data Perbandingan",
+        path: "/comparison",
+        allowedRoles: ["Admin", "User"],
+      },
+      {
+        label: "Penyesuaian Honor",
+        path: "/adjustment",
+        allowedRoles: ["Admin", "User"],
+      },
+    ],
   },
-  {
-    label: "Data Piutang",
-    icon: <BarChart2 className="w-5 h-5" />,
-    path: "/data-piutang",
-    allowedRoles: ["Admin", "User", "Approver_1", "Approver_2"],
-  },
-  {
-    label: "Data Perbandingan",
-    icon: <BarChart2 className="w-5 h-5" />,
-    path: "/comparison",
-    allowedRoles: ["Admin", "User", "Approver_1", "Approver_2"],
-  },
+
   {
     label: "Honor",
     icon: <BadgeDollarSign className="w-5 h-5" />,
-    allowedRoles: ["Admin", "User", "Approver_1", "Approver_2"],
+    allowedRoles: ["Admin", "User", "Approver_1", "Approver_2", "Approver_3"],
     children: [
       {
         label: "Data Permohonan",
         path: "/request-list",
-        allowedRoles: ["Admin", "User", "Approver_1", "Approver_2"],
+        allowedRoles: [
+          "Admin",
+          "User",
+          "Approver_1",
+          "Approver_2",
+          "Approver_3",
+        ],
       },
       {
         label: "Data Honor",
         path: "/honor-data",
-        allowedRoles: ["Admin", "User", "Approver_1", "Approver_2"],
+        allowedRoles: [
+          "Admin",
+          "User",
+          "Approver_1",
+          "Approver_2",
+          "Approver_3",
+        ],
       },
       {
         label: "Honor Dokter",
         path: "/honor-dokter",
-        allowedRoles: ["Admin", "User", "Approver_1", "Approver_2"],
+        allowedRoles: [
+          "Admin",
+          "User",
+          "Approver_1",
+          "Approver_2",
+          "Approver_3",
+        ],
       },
     ],
   },
@@ -137,7 +164,7 @@ export default function SidebarCollapsible() {
 
   return (
     <aside
-      className={`fixed top-0 left-0 h-full bg-white text-gray-600 shadow-xl flex flex-col `}
+      className={`fixed top-0 left-0 h-full bg-white text-gray-600 shadow-xl flex flex-col w-64 `}
     >
       {/* Header */}
       <div className="px-6 py-6 border-none flex justify-center">
@@ -161,13 +188,13 @@ export default function SidebarCollapsible() {
                     ? toggleDropdown(item.label)
                     : handleNavigate(item.path)
                 }
-                className={`group relative flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm font-medium transition-all bg-transparent border-dotted border-gray-50 outline-none${
+                className={`group relative flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm font-medium transition-all bg-transparent hover:border-transparent  focus:outline-none ${
                   isActive
-                    ? " bg-gradient-to-r from-green-400 to-emerald-500 text-white focus:outline-none focus:ring-0 outline-none border-none"
+                    ? " bg-gradient-to-r from-green-400 to-emerald-500 text-white  "
                     : "text-gray-600 hover:text-white hover:bg-gradient-to-r from-green-400 to-emerald-500"
                 }`}
               >
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 focus:outline-none">
                   {item.icon}
                   <span>{item.label}</span>
                 </div>
@@ -184,14 +211,14 @@ export default function SidebarCollapsible() {
 
               {/* Submenu */}
               {isDropdown && isOpen && (
-                <div className="ml-9 mt-1 space-y-1">
+                <div className="ml-9 mt-1 space-y-1 outline-none">
                   {item.children!.map((child, i) => (
                     <button
                       key={i}
                       onClick={() => handleNavigate(child.path)}
-                      className={`group relative flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium bg-transparent border-dotted border-gray-50 outline-none transition-all ${
+                      className={`group relative flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium bg-transparent hover:border-transparent  outline-none transition-all focus:outline-none ${
                         activePath === child.path
-                          ? "hover:outline-none hover:ring-0 bg-gradient-to-r from-green-400 to-emerald-500 text-white focus:outline-none focus:ring-0 outline-none border-none"
+                          ? "hover:outline-none hover:ring-0 bg-gradient-to-r from-green-400 to-emerald-500 text-white "
                           : "text-gray-600 hover:text-white hover:bg-gradient-to-r from-green-400 to-emerald-500"
                       }`}
                     >

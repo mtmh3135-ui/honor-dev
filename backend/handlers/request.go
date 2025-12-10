@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -30,7 +31,7 @@ func GetHonorRequests(c *fiber.Ctx) error {
 	// Query SQL dengan created_by disertakan
 	query := `
     SELECT h.id, h.description, h.counted_month, h.counted_year, h.status,
-           h.created_by, u.username, h.created_at, 
+           h.created_by, u.username,
            h.approved_lvl1, h.approved_lvl2, h.cancelled_at
     FROM honor_request h
     LEFT JOIN user u ON h.created_by = u.user_id
@@ -53,6 +54,11 @@ func GetHonorRequests(c *fiber.Ctx) error {
 	if role == "Approver_2" {
 		query += " AND status = 'PENDING_APPROVAL_2' AND approved_lvl1 IS NOT NULL"
 	}
+	// Approver 3 lihat permohonan pending approval 3
+	// yang sudah diapprove oleh Approver 1
+	if role == "Approver_3" {
+		query += " AND status = 'PENDING_APPROVAL_3' AND approved_lvl2 IS NOT NULL"
+	}
 	if role == "Admin" {
 	}
 	if month != "" {
@@ -68,7 +74,7 @@ func GetHonorRequests(c *fiber.Ctx) error {
 		args = append(args, status)
 	}
 
-	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+	query += " ORDER BY h.created_at DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
 
 	rows, err := config.DB.Query(query, args...)
@@ -86,7 +92,7 @@ func GetHonorRequests(c *fiber.Ctx) error {
 
 		err := rows.Scan(
 			&r.ID, &description, &r.CountedMonth, &r.CountedYear,
-			&r.Status, &r.CreatedBy, &r.Username, &r.CreatedAt,
+			&r.Status, &r.CreatedBy, &r.Username,
 			&approvedLvl1, &approvedLvl2, &cancelledAt,
 		)
 		if err != nil {
@@ -132,7 +138,7 @@ func GetHonorRequests(c *fiber.Ctx) error {
 
 func GetHonorRequestDetail(c *fiber.Ctx) error {
 	requestId := c.Params("id")
-
+	role := c.Locals("role")
 	// --- GET MAIN REQUEST DATA ---
 	var request models.HonorRequest
 	err := config.DB.QueryRow(`
@@ -173,13 +179,14 @@ func GetHonorRequestDetail(c *fiber.Ctx) error {
 
 		rows.Scan(&doctorName, &totalHonor)
 
-		// GET visit + txn_code details
+		// === 1. GET VISIT DETAIL (BILL) ===
 		visitRows, err := config.DB.Query(`
-            SELECT DISTINCT hrdt.visit_no
-            FROM honor_request_detail_doctor hrdt
-			JOIN honor_request_detail hrd on hrdt.honor_request_detail_id = hrd.id
-            WHERE hrd.request_id = ? AND hrd.doctor_name = ?
-        `, requestId, doctorName)
+    		SELECT DISTINCT hrdt.visit_no
+   			FROM honor_request_detail_doctor hrdt
+    		JOIN honor_request_detail hrd ON hrdt.honor_request_detail_id = hrd.id
+    		WHERE hrd.request_id = ? AND hrd.doctor_name = ?
+    		AND hrdt.type = 'BILL'
+		`, requestId, doctorName)
 
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
@@ -191,23 +198,40 @@ func GetHonorRequestDetail(c *fiber.Ctx) error {
 			var visitNo string
 			visitRows.Scan(&visitNo)
 
-			// GET TXN DETAIL FROM patient_bill
+			// GET BILL ITEMS
 			txnRows, _ := config.DB.Query(`
-                SELECT txn_code, honor_final
-                FROM patient_bill
-                WHERE visit_no = ?
-                  AND LOWER(txn_doctor) = LOWER(?)
-            `, visitNo, doctorName)
+        		SELECT patient_type,
+               DATE_FORMAT(admission_date_time,'%d %b %Y'),
+               DATE_FORMAT(discharge_date_time,'%d %b %Y'),
+               card_no,
+               patient_name,
+               organisation_name,
+               txn_desc,
+               honor_final
+        	FROM patient_bill
+       		WHERE visit_no = ?
+          	AND LOWER(txn_doctor) = LOWER(?)
+          	AND honor_final != 0
+    		`, visitNo, doctorName)
 
 			var items []fiber.Map
+
 			for txnRows.Next() {
-				var txnCode string
+				var patientType, inDate, outDate, nama, company, desc string
+				var nrm int64
 				var amount float64
-				txnRows.Scan(&txnCode, &amount)
+
+				txnRows.Scan(&patientType, &inDate, &outDate, &nrm, &nama, &company, &desc, &amount)
 
 				items = append(items, fiber.Map{
-					"txn_code": txnCode,
-					"honor":    amount,
+					"patient_type": patientType,
+					"masuk":        inDate,
+					"keluar":       outDate,
+					"nrm":          nrm,
+					"pasien":       nama,
+					"company":      company,
+					"txn_desc":     desc,
+					"honor":        amount,
 				})
 			}
 			txnRows.Close()
@@ -219,20 +243,59 @@ func GetHonorRequestDetail(c *fiber.Ctx) error {
 		}
 		visitRows.Close()
 
+		// === 2. GET ADJUSTMENT (TANPA VISIT NO) ===
+		adjRows, _ := config.DB.Query(`
+    			SELECT hrdt.description, hrdt.amount
+    			FROM honor_request_detail_doctor hrdt
+    			JOIN honor_request_detail hrd ON hrdt.honor_request_detail_id = hrd.id
+    			WHERE hrd.request_id = ? AND hrd.doctor_name = ? AND hrdt.type = 'ADJUSTMENT'
+			`, requestId, doctorName)
+
+		var adjItems []fiber.Map
+
+		for adjRows.Next() {
+			var desc string
+			var amount float64
+
+			adjRows.Scan(&desc, &amount)
+
+			adjItems = append(adjItems, fiber.Map{
+				"patient_type": nil,
+				"masuk":        nil,
+				"keluar":       nil,
+				"nrm":          nil,
+				"pasien":       nil,
+				"company":      nil,
+				"txn_desc":     desc, // DESKRIPSI ADJUSTMENT
+				"honor":        amount,
+			})
+		}
+		adjRows.Close()
+
+		// Jika ada adjustment → masukkan sebagai visit terpisah dengan visit_no = null
+		if len(adjItems) > 0 {
+			visitDetails = append(visitDetails, fiber.Map{
+				"visit_no": nil,
+				"items":    adjItems,
+			})
+		}
+		// === FIX PENTING ===
+		// Masukkan seluruh visitDetails ke doctorData
 		doctorData = append(doctorData, fiber.Map{
 			"doctor_name": doctorName,
 			"total_honor": totalHonor,
 			"details":     visitDetails,
 		})
 	}
-
 	return c.JSON(fiber.Map{
+		"role":    role,
 		"request": request,
 		"doctors": doctorData,
 	})
 }
 
-func SubmitHonorRequest(c *fiber.Ctx) error {
+// Submit Request Sebelumnya
+func SubmitHonorRequestLate(c *fiber.Ctx) error {
 	var body struct {
 		CountedMonth *int                 `json:"counted_month"`
 		CountedYear  *int                 `json:"counted_year"`
@@ -261,7 +324,6 @@ func SubmitHonorRequest(c *fiber.Ctx) error {
           AND counted_year = ?
           AND status IN ('PENDING_APPROVAL_1','PENDING_APPROVAL_2','APPROVED')
     `, month, year).Scan(&existing)
-
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -299,7 +361,7 @@ func SubmitHonorRequest(c *fiber.Ctx) error {
 
 	// Prepare SELECT
 	rows, err := tx.Query(`
-        SELECT txn_doctor,visit_no_fix 
+        SELECT txn_doctor,visit_no,visit_no_fix, honor_final, txn_desc,careprovider_txn_doctor_id
         FROM patient_bill
         WHERE  honor_status = 'COUNTED'
           AND MONTH(counted_date) = ?
@@ -312,24 +374,33 @@ func SubmitHonorRequest(c *fiber.Ctx) error {
 	}
 	defer rows.Close()
 	// build map doctor(lower) -> []visit_no_fix
-	doctorVisits := make(map[string][]string)
+	doctorVisits := make(map[string][]struct {
+		VisitNo                 string
+		VisitNoFix              string
+		Honor                   float64
+		Desc                    string
+		CareproviderTxnDoctorId int64
+	})
 	for rows.Next() {
-		var doc sql.NullString
-		var visit sql.NullString
-		if err := rows.Scan(&doc, &visit); err != nil {
-
-			rows.Close()
+		var doc, visit, visitfix, desc string
+		var honor float64
+		var careproviderid int64
+		if err := rows.Scan(&doc, &visit, &visitfix, &honor, &desc, &careproviderid); err != nil {
 			tx.Rollback()
 			return c.Status(500).JSON(fiber.Map{"error": "scan patient_bill: " + err.Error()})
 		}
-		if !doc.Valid || !visit.Valid {
-			continue
-		}
-		key := strings.ToLower(strings.TrimSpace(doc.String))
-		doctorVisits[key] = append(doctorVisits[key], visit.String)
+
+		key := strings.ToLower(strings.TrimSpace(doc))
+		doctorVisits[key] = append(doctorVisits[key], struct {
+			VisitNo                 string
+			VisitNoFix              string
+			Honor                   float64
+			Desc                    string
+			CareproviderTxnDoctorId int64
+		}{visit, visitfix, honor, desc, careproviderid})
 	}
+
 	if err := rows.Err(); err != nil {
-		rows.Close()
 		tx.Rollback()
 		return c.Status(500).JSON(fiber.Map{"error": "rows error: " + err.Error()})
 	}
@@ -346,10 +417,11 @@ func SubmitHonorRequest(c *fiber.Ctx) error {
 	}
 	defer stmtInsert.Close()
 
+	// Insert Detail doctor (BILL+ADJUSTMENT)
 	stmtInsertItems, err := tx.Prepare(`
     	INSERT INTO honor_request_detail_doctor
-    		(honor_request_detail_id, doctor_name, visit_no, honor_final)
-    		VALUES (?, ?, ?, ?)
+		(honor_request_detail_id, doctor_name, visit_no, description, amount, type, careprovider_txn_doctor_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 		`)
 	if err != nil {
 		tx.Rollback()
@@ -359,75 +431,86 @@ func SubmitHonorRequest(c *fiber.Ctx) error {
 
 	// loop dokter dari payload, cari visit list di map, insert per visit
 	totalInserted := 0
+
 	for _, d := range body.Data {
 		key := strings.ToLower(strings.TrimSpace(d.DoctorName))
-		visits := doctorVisits[key]
-		if len(visits) == 0 {
-			// untuk debugging: tidak ada visit untuk nama dokter ini
-			log.Println("SubmitHonorRequest: no visits found for doctor:", d.DoctorName)
-			continue
-		}
+		bills := doctorVisits[key]
 
-		var doctorID interface{}
-		if d.CareproviderTxnDoctorId != 0 {
-			doctorID = d.CareproviderTxnDoctorId
-		} else {
-			doctorID = nil
-		}
-		// insert honor_request_detail
-		resDetail, err := stmtInsert.Exec(requestID, d.DoctorName, doctorID, d.TotalHonor)
+		// insert detail header
+		resDetail, err := stmtInsert.Exec(requestID, d.DoctorName, d.CareproviderTxnDoctorId, d.TotalHonor)
 		if err != nil {
 			tx.Rollback()
-			return c.Status(500).JSON(fiber.Map{"error": "insert detail failed: " + err.Error()})
+			return c.Status(500).JSON(fiber.Map{"error": "insert detail gagal: " + err.Error()})
 		}
 
-		// Ambil honor_request_detail_id untuk tabel rincian
 		detailID, err := resDetail.LastInsertId()
 		if err != nil {
 			tx.Rollback()
-			return c.Status(500).JSON(fiber.Map{"error": "cannot get detail id: " + err.Error()})
+			return c.Status(500).JSON(fiber.Map{"error": "last insert detail error: " + err.Error()})
 		}
 
-		// Loop semua visit dokter ini
-		for _, visit := range visits {
-			// Ambil honor_final per visit dari patient_bill
-			var honorFinal sql.NullFloat64
-			err := tx.QueryRow(`
-        	SELECT honor_final
-        	FROM patient_bill
-        	WHERE visit_no_fix = ?
-          	AND LOWER(txn_doctor) = LOWER(?)
-        	LIMIT 1
-    	`, visit, d.DoctorName).Scan(&honorFinal)
-
-			if err != nil {
-				// Tetap lanjut; honor_final mungkin tidak ada
-				log.Println("Warning: honor_final not found for visit", visit, "doctor", d.DoctorName)
-				continue
-			}
-
-			// Insert ke tabel rincian
-			_, err = stmtInsertItems.Exec(
-				detailID,
-				d.DoctorName,
-				visit,
-				honorFinal.Float64,
-			)
+		// insert BILL
+		for _, b := range bills {
+			_, err := stmtInsertItems.Exec(detailID, d.DoctorName, b.VisitNo, b.Desc, b.Honor, "BILL", b.CareproviderTxnDoctorId)
 			if err != nil {
 				tx.Rollback()
-				return c.Status(500).JSON(fiber.Map{"error": "insert detail item failed: " + err.Error()})
+				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 			}
-
 			totalInserted++
 		}
 
+		// insert ADJUSTMENT
+		rowsAdj, err := tx.Query(`
+			SELECT notes, amount
+			FROM honor_adjustment
+			WHERE careprovider_txn_doctor_id=? AND counted_month=? AND counted_year=?
+		`, d.CareproviderTxnDoctorId, month, year)
+
+		if err != nil {
+			tx.Rollback()
+			return c.Status(500).JSON(fiber.Map{
+				"error": "Query adjustment gagal: " + err.Error(),
+			})
+		}
+		defer rowsAdj.Close()
+
+		for rowsAdj.Next() {
+			var note string
+			var amt float64
+			if err := rowsAdj.Scan(&note, &amt); err != nil {
+				tx.Rollback()
+				return c.Status(500).JSON(fiber.Map{
+					"error": "scan adjustment: " + err.Error(),
+				})
+			}
+
+			_, err := stmtInsertItems.Exec(
+				detailID,
+				d.DoctorName,
+				nil, // visit_no = NULL
+				note,
+				amt,
+				"ADJUSTMENT",
+				d.CareproviderTxnDoctorId,
+			)
+			if err != nil {
+				tx.Rollback()
+				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+			}
+			totalInserted++
+		}
+		if err := rowsAdj.Err(); err != nil {
+			tx.Rollback()
+			return c.Status(500).JSON(fiber.Map{"error": "rowsAdj error: " + err.Error()})
+		}
+		rowsAdj.Close()
 	}
 
 	// Update patient_bill
 	_, err = tx.Exec(`
 	    UPDATE patient_bill pb
 	JOIN honor_request_detail_doctor hrd 
-      ON pb.visit_no_fix = hrd.visit_no
+      ON pb.visit_no = hrd.visit_no
 	JOIN honor_request_detail hrdt
       ON hrd.honor_request_detail_id = hrdt.id
 	SET pb.honor_status = 'ON_PROGRESS'
@@ -438,22 +521,22 @@ func SubmitHonorRequest(c *fiber.Ctx) error {
 		tx.Rollback()
 		return c.Status(500).JSON(fiber.Map{"error": "Update bill gagal: " + err.Error()})
 	}
-
-	if err := tx.Commit(); err != nil {
-		tx.Rollback()
-		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-	}
 	// Ambil userID dari JWT
 	userIDValue := c.Locals("user_id")
 	UserID, ok := userIDValue.(int64)
 	if !ok {
 		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
 	}
+
 	// ✅ Log aktivitas
 	if err := helpers.LogActivity(c, UserID, "Input Permohonan", "Permohonan Honor Bulan "); err != nil {
 		log.Println("❌ Gagal simpan log activity:", err)
 	} else {
 		log.Println("✅ Activity logged untuk user", UserID)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	return c.JSON(fiber.Map{
@@ -464,9 +547,289 @@ func SubmitHonorRequest(c *fiber.Ctx) error {
 	})
 }
 
+func SubmitHonorRequest(c *fiber.Ctx) error {
+	// Parse body
+	var body struct {
+		CountedMonth *int                 `json:"counted_month"`
+		CountedYear  *int                 `json:"counted_year"`
+		Data         []models.HonorDoctor `json:"data"`
+	}
+
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid JSON body"})
+	}
+
+	uID, ok := c.Locals("user_id").(int64)
+	if !ok {
+		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	if body.CountedMonth == nil || body.CountedYear == nil {
+		return c.Status(400).JSON(fiber.Map{"error": "counted_month and counted_year are required"})
+	}
+	month := *body.CountedMonth
+	year := *body.CountedYear
+
+	if len(body.Data) == 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "No doctor data provided"})
+	}
+
+	// Start transaction
+	tx, err := config.DB.Begin()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			tx.Rollback()
+			panic(p)
+		}
+	}()
+
+	// Cek duplicate request
+	if err := checkDuplicateRequest(tx, month, year); err != nil {
+		tx.Rollback()
+		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Insert header
+	requestID, err := insertHonorRequestHeader(tx, uID, month, year)
+	if err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Ambil semua visit per dokter dari patient_bill
+	doctorVisits, err := getDoctorVisitsMap(tx, month, year)
+	if err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Ambil semua adjustment sekaligus (1 query)
+	allAdjustments, err := getAllAdjustments(tx, month, year)
+	if err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Insert detail & items
+	totalInserted, err := insertHonorDetailsBatch(tx, requestID, body.Data, doctorVisits, allAdjustments)
+	if err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Update patient_bill
+	if err := updatePatientBill(tx, requestID); err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Log activity
+	if err := helpers.LogActivity(c, uID, "Input Permohonan", "Permohonan Honor Bulan"); err != nil {
+		log.Println("❌ Gagal simpan log activity:", err)
+	} else {
+		log.Println("✅ Activity logged untuk user", uID)
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{
+		"message":        "Permohonan honor berhasil dikirim",
+		"request_id":     requestID,
+		"total_dokter":   len(body.Data),
+		"total_inserted": totalInserted,
+	})
+}
+
+func checkDuplicateRequest(tx *sql.Tx, month, year int) error {
+	var existing int
+	err := tx.QueryRow(`
+        SELECT COUNT(*) 
+        FROM honor_request
+        WHERE counted_month = ? AND counted_year = ? 
+          AND status IN ('PENDING_APPROVAL_1','PENDING_APPROVAL_2','APPROVED')
+    `, month, year).Scan(&existing)
+	if err != nil {
+		return err
+	}
+	if existing > 0 {
+		return fmt.Errorf("Duplicate request")
+	}
+	return nil
+}
+
+func insertHonorRequestHeader(tx *sql.Tx, userID int64, month, year int) (int64, error) {
+	res, err := tx.Exec(`
+        INSERT INTO honor_request 
+        (description, counted_month, counted_year, created_by, status)
+        VALUES (CONCAT('Honor Dokter MTSW Bulan ', ?, ' Tahun ', ?), ?, ?, ?, 'PENDING_APPROVAL_1')
+    `, month, year, month, year, userID)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// Ambil semua adjustment sekaligus
+func getAllAdjustments(tx *sql.Tx, month, year int) (map[int64][]struct {
+	Note   string
+	Amount float64
+}, error) {
+	rows, err := tx.Query(`
+        SELECT careprovider_txn_doctor_id, notes, amount
+        FROM honor_adjustment
+        WHERE counted_month=? AND counted_year=?
+    `, month, year)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	adjustments := make(map[int64][]struct {
+		Note   string
+		Amount float64
+	})
+
+	for rows.Next() {
+		var doctorID int64
+		var note string
+		var amt float64
+		if err := rows.Scan(&doctorID, &note, &amt); err != nil {
+			return nil, err
+		}
+		adjustments[doctorID] = append(adjustments[doctorID], struct {
+			Note   string
+			Amount float64
+		}{note, amt})
+	}
+	return adjustments, rows.Err()
+}
+
+// Batch insert detail doctor
+func insertHonorDetailsBatch(tx *sql.Tx, requestID int64, doctors []models.HonorDoctor,
+	doctorVisits map[string][]struct {
+		VisitNo, VisitNoFix, Desc string
+		Honor                     float64
+		CareproviderTxnDoctorId   int64
+	},
+	allAdjustments map[int64][]struct {
+		Note   string
+		Amount float64
+	}) (int, error) {
+
+	totalInserted := 0
+
+	stmtDetail, err := tx.Prepare(`
+        INSERT INTO honor_request_detail
+        (request_id, doctor_name, doctor_id, total_honor)
+        VALUES (?, ?, ?, ?)
+    `)
+	if err != nil {
+		return 0, err
+	}
+	defer stmtDetail.Close()
+
+	for _, d := range doctors {
+		key := strings.ToLower(strings.TrimSpace(d.DoctorName))
+		bills := doctorVisits[key]
+
+		resDetail, err := stmtDetail.Exec(requestID, d.DoctorName, d.CareproviderTxnDoctorId, d.TotalHonor)
+		if err != nil {
+			return totalInserted, err
+		}
+		detailID, _ := resDetail.LastInsertId()
+
+		// Prepare batch insert for bills + adjustments
+		var args []interface{}
+		for _, b := range bills {
+			args = append(args, detailID, d.DoctorName, b.VisitNo, b.Desc, b.Honor, "BILL", b.CareproviderTxnDoctorId)
+			totalInserted++
+		}
+
+		for _, adj := range allAdjustments[d.CareproviderTxnDoctorId] {
+			args = append(args, detailID, d.DoctorName, nil, adj.Note, adj.Amount, "ADJUSTMENT", d.CareproviderTxnDoctorId)
+			totalInserted++
+		}
+
+		// Execute batch insert per 50 row
+		for i := 0; i < len(args); i += 7 * 50 {
+			end := i + 7*50
+			if end > len(args) {
+				end = len(args)
+			}
+			batchArgs := args[i:end]
+			vals := make([]string, len(batchArgs)/7)
+			for j := range vals {
+				vals[j] = "(?, ?, ?, ?, ?, ?, ?)"
+			}
+			query := "INSERT INTO honor_request_detail_doctor (honor_request_detail_id, doctor_name, visit_no, description, amount, type, careprovider_txn_doctor_id) VALUES " + strings.Join(vals, ",")
+			if _, err := tx.Exec(query, batchArgs...); err != nil {
+				return totalInserted, err
+			}
+		}
+	}
+
+	return totalInserted, nil
+}
+
+func getDoctorVisitsMap(tx *sql.Tx, month, year int) (map[string][]struct {
+	VisitNo, VisitNoFix, Desc string
+	Honor                     float64
+	CareproviderTxnDoctorId   int64
+}, error) {
+	rows, err := tx.Query(`
+        SELECT txn_doctor, visit_no, visit_no_fix, honor_final, txn_desc, careprovider_txn_doctor_id
+        FROM patient_bill
+        WHERE honor_status = 'COUNTED' AND MONTH(counted_date) = ? AND YEAR(counted_date) = ?
+    `, month, year)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	doctorVisits := make(map[string][]struct {
+		VisitNo, VisitNoFix, Desc string
+		Honor                     float64
+		CareproviderTxnDoctorId   int64
+	})
+
+	for rows.Next() {
+		var doc, visit, visitfix, desc string
+		var honor float64
+		var careproviderid int64
+		if err := rows.Scan(&doc, &visit, &visitfix, &honor, &desc, &careproviderid); err != nil {
+			return nil, err
+		}
+		key := strings.ToLower(strings.TrimSpace(doc))
+		doctorVisits[key] = append(doctorVisits[key], struct {
+			VisitNo, VisitNoFix, Desc string
+			Honor                     float64
+			CareproviderTxnDoctorId   int64
+		}{visit, visitfix, desc, honor, careproviderid})
+	}
+
+	return doctorVisits, rows.Err()
+}
+
+func updatePatientBill(tx *sql.Tx, requestID int64) error {
+	_, err := tx.Exec(`
+        UPDATE patient_bill pb
+        JOIN honor_request_detail_doctor hrd ON pb.visit_no = hrd.visit_no
+        JOIN honor_request_detail hrdt ON hrd.honor_request_detail_id = hrdt.id
+        SET pb.honor_status = 'ON_PROGRESS'
+        WHERE hrdt.request_id = ?
+    `, requestID)
+	return err
+}
+
 func ApproveLevel1(c *fiber.Ctx) error {
 	id := c.Params("id")
-	log.Printf("Honor req Id: %s", id)
+	log.Printf("Honor req Id: %v", id)
 
 	tx, err := config.DB.Begin()
 	if err != nil {
@@ -508,10 +871,45 @@ func ApproveLevel2(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	res, err := tx.Exec(`
+        UPDATE honor_request 
+        SET status = 'PENDING_APPROVAL_3', approved_lvl2 = NOW() 
+        WHERE id = ? AND status = 'PENDING_APPROVAL_2'
+    `, id)
+	if err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		tx.Rollback()
+		return c.Status(400).JSON(fiber.Map{
+			"error": "Data tidak ditemukan atau status tidak valid",
+		})
+	}
+
+	// 🔥 WAJIB agar perubahan masuk DB
+	if err := tx.Commit(); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"message": "Approved by Approver 1"})
+}
+
+func ApproveLevel3(c *fiber.Ctx) error {
+	id := c.Params("id")
+	log.Printf("Honor req Id: %s", id)
+
+	tx, err := config.DB.Begin()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
 	_, err = tx.Exec(`
         UPDATE honor_request 
-		SET status = 'APPROVED', approved_lvl2 =NOW() 
-        WHERE id = ? AND status = 'PENDING_APPROVAL_2'
+		SET status = 'APPROVED', approved_lvl3 =NOW() 
+        WHERE id = ? AND status = 'PENDING_APPROVAL_3'
     `, id)
 	if err != nil {
 		tx.Rollback()
@@ -538,7 +936,7 @@ func ApproveLevel2(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	return c.JSON(fiber.Map{"message": "Approved by Approver 1"})
+	return c.JSON(fiber.Map{"message": "Approved by Approver 3"})
 }
 
 func CancelHonorRequest(c *fiber.Ctx) error {

@@ -1,4 +1,4 @@
-package processor
+package handlers
 
 import (
 	"fmt"
@@ -27,19 +27,22 @@ func ComparisonDataUp(r io.Reader) error {
 		return err
 	}
 	defer rows.Close()
-
+	rowIndex := 0
 	// Skip first row if it's title
 	rows.Next()
+	rowIndex++
 	// Header
 
 	headers, _ := rows.Columns()
 	log.Println("Headers:", headers)
 
 	//validasi header
-	expectedHeaders := []string{"visit number", "status", "visit number tujuan", "tarif ina cbg"}
+	expectedHeaders := []string{"visit number", "status", "visit number tujuan", "tarif ina cbg", "kelas bpjs", "tarif sebelum topup"}
 	if err := validateHeaders(headers, expectedHeaders); err != nil {
 		return fmt.Errorf("header pada file yang di upload tidak sesuai\nheader: %v", headers)
 	}
+	headerCount := len(headers)
+	headers = append(headers, "tkr_status")
 
 	// Batch insert
 	batch := make([][]string, 0, 1000)
@@ -50,8 +53,20 @@ func ComparisonDataUp(r io.Reader) error {
 	processed := 0
 
 	for rows.Next() {
+		rowIndex++
 		values, _ := rows.Columns()
 		processed++
+
+		if len(values) < headerCount {
+			// pad dengan string kosong sampai sama panjang
+			for len(values) < headerCount {
+				values = append(values, "")
+			}
+		} else if len(values) > headerCount {
+			// trim jika ada kolom berlebih (misal ada trailing accidental columns)
+			values = values[:headerCount]
+		}
+
 		if len(values) < len(expectedHeaders) {
 			return fmt.Errorf("baris %d memiliki kolom kurang dari %d", processed+2, len(expectedHeaders))
 		}
@@ -59,6 +74,14 @@ func ComparisonDataUp(r io.Reader) error {
 			return fmt.Errorf("baris %d tidak memiliki visit_number", processed+2)
 		}
 
+		// Cek TKR
+		IsTkr := 0
+		if IsTKR(f, sheet, rowIndex) { // processed+1 karena row index di Excel mulai dari 2 (header di row 1)
+			IsTkr = 1
+			log.Println("visit number ini bedah TKR")
+		}
+
+		values = append(values, fmt.Sprintf("%d", IsTkr))
 		batch = append(batch, values)
 		if len(batch) >= 1000 {
 			insertBatchDynamics(headers, batch, uniqueKeys)
@@ -152,7 +175,13 @@ func insertBatchDynamics(headers []string, batch [][]string, uniqueKeys []string
 		args := make([]interface{}, len(headers))
 		for i := range headers {
 			if i < len(row) {
-				args[i] = row[i]
+				v := strings.TrimSpace(row[i])
+				// jika kolom kosong → jadikan nil supaya MySQL menerima NULL
+				if v == "" {
+					args[i] = nil
+				} else {
+					args[i] = v
+				}
 			} else {
 				args[i] = nil
 			}
@@ -170,4 +199,63 @@ func insertBatchDynamics(headers []string, batch [][]string, uniqueKeys []string
 	} else {
 		log.Printf("Committed %d rows", inserted)
 	}
+}
+
+func HasBackgroundFill(f *excelize.File, sheet, cell string) (bool, string) {
+	styleID, err := f.GetCellStyle(sheet, cell)
+	if err != nil {
+		return false, ""
+	}
+
+	style, err := f.GetStyle(styleID)
+	if err != nil {
+		return false, ""
+	}
+
+	fill := style.Fill
+
+	// Jika tidak ada pola warna → tidak ada warna
+	if fill.Pattern == 0 && len(fill.Color) == 0 {
+		return false, ""
+	}
+
+	// Jika Excel mengembalikan banyak warna, ambil yang pertama saja
+	if len(fill.Color) > 0 {
+		color := strings.ToUpper(fill.Color[0])
+		color = strings.TrimPrefix(color, "FF") // normalisasi
+
+		return true, color
+	}
+
+	return false, ""
+}
+
+func IsBlueColor(hex string) bool {
+	hex = strings.ToUpper(strings.ReplaceAll(hex, "FF", "")) // normalisasi
+
+	bluePallet := []string{
+		"0070C0",
+		"5B9BD5",
+		"2F5597",
+		"0000FF",
+	}
+
+	for _, b := range bluePallet {
+		if strings.Contains(hex, b) {
+			return true
+		}
+	}
+	return false
+}
+
+func IsTKR(f *excelize.File, sheet string, rowIndex int) bool {
+	// cek warna hanya pada kolom A
+	cell, _ := excelize.CoordinatesToCellName(1, rowIndex)
+	hasFill, color := HasBackgroundFill(f, sheet, cell)
+	if !hasFill {
+		// log.Println("Cell ini tidak memiliki warna background")
+		return false
+	}
+
+	return IsBlueColor(color)
 }

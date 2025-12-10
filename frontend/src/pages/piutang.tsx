@@ -129,7 +129,7 @@ const UploadAis: React.FC = () => {
           </div>
 
           {/* BUTTON UPLOAD */}
-          <label className="bg-green-500 text-white px-4 py-2 rounded-lg cursor-pointer flex items-center gap-2 hover:bg-green-600">
+          <label className="flex items-center gap-2 hover:border-transparent bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200">
             <Upload className="w-4 h-4" />
             Pilih File
             <input
@@ -145,8 +145,8 @@ const UploadAis: React.FC = () => {
             disabled={!file || uploading}
             className={`px-4 py-2 rounded-lg text-white font-semibold ${
               uploading || !file
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-green-600 hover:bg-green-700"
+                ? "bg-gray-400 cursor-not-allowed hover:border-transparent"
+                : "bg-green-600 hover:border-transparent rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
             }`}
           >
             {uploading ? "Uploading..." : "Upload"}
@@ -177,7 +177,7 @@ const UploadAis: React.FC = () => {
 
           <button
             onClick={handleSearch}
-            className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+            className="flex items-center gap-2 hover:border-transparent focus:outline-none bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
           >
             <Search className="w-4 h-4" /> Search
           </button>

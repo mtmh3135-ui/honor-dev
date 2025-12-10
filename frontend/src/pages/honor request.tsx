@@ -67,6 +67,7 @@ export default function RequestList() {
 
       Swal.fire("Dibatalkan", "Permohonan berhasil dibatalkan.", "success");
       fetchData();
+      setTimeout(() => setLoading(false), 200);
     } catch (err: any) {
       Swal.fire(
         "Error",
@@ -99,6 +100,7 @@ export default function RequestList() {
 
       Swal.fire("Dibatalkan", "Permohonan berhasil dibatalkan.", "success");
       fetchData();
+      setTimeout(() => setLoading(false), 200);
     } catch (err: any) {
       Swal.fire(
         "Error",
@@ -121,6 +123,7 @@ export default function RequestList() {
 
       Swal.fire("Approved", "Permohonan berhasil di setujui.", "success");
       fetchData();
+      setTimeout(() => setLoading(false), 200);
     } catch (err: any) {
       setLoading(false);
       Swal.fire(
@@ -144,6 +147,31 @@ export default function RequestList() {
 
       Swal.fire("Approved", "Permohonan berhasil di setujui.", "success");
       fetchData();
+      setTimeout(() => setLoading(false), 200);
+    } catch (err: any) {
+      setLoading(false);
+      Swal.fire(
+        "Error",
+        err.response?.data?.error || "Gagal Setujui Permohonan.",
+        "error"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprovelvl3 = async (id: number) => {
+    setLoading(true);
+    try {
+      await axios.put(
+        `http://localhost:8080/api/honor/approve/3/${id}`,
+        {},
+        { withCredentials: true }
+      );
+
+      Swal.fire("Approved", "Permohonan berhasil di setujui.", "success");
+      fetchData();
+      setTimeout(() => setLoading(false), 200);
     } catch (err: any) {
       setLoading(false);
       Swal.fire(
@@ -243,14 +271,13 @@ export default function RequestList() {
                         <td className="p-3">{row.counted_year}</td>
                         <td className="p-3 font-semibold">
                           {row.status == "Pending_Approval_1" && (
-                            <span className="text-yellow-400">
-                              On Progress Approval 1
-                            </span>
+                            <span className="text-blue-600">On Progress 1</span>
                           )}
                           {row.status == "Pending_Approval_2" && (
-                            <span className="text-yellow-400">
-                              On Progress Approval 2
-                            </span>
+                            <span className="text-blue-600">On Progress 2</span>
+                          )}
+                          {row.status == "Pending_Approval_3" && (
+                            <span className="text-blue-600">On Progress 3</span>
                           )}
                           {row.status == "Approved" && (
                             <span className="text-green-600">Approved</span>
@@ -272,26 +299,36 @@ export default function RequestList() {
                             row.status === "Pending_Approval_1" && (
                               <button
                                 onClick={() => handleCancel(row.id)}
-                                className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl shadow hover:bg-red-600 transition-all duration-200 focus:outline-none"
+                                className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl shadow hover:bg-red-600 transition-all duration-200 focus:outline-none hover:border-transparent"
                               >
                                 <XCircle size={16} /> Cancel
                               </button>
                             )}
-
+                          {/* HANDLING ADMIN */}
+                          {role === "Admin" && (
+                            <div className="flex justify-left items-center gap-3">
+                              <button
+                                onClick={() => handleReject(row.id)}
+                                className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl shadow hover:bg-red-600 transition-all duration-200 focus:outline-none hover:border-transparent"
+                              >
+                                <XCircle size={16} /> Reject
+                              </button>
+                            </div>
+                          )}
                           {/* APPROVER LEVEL 1 */}
                           {role === "Approver_1" &&
                             row.status === "Pending_Approval_1" && (
                               <div className="flex justify-left items-center gap-3">
                                 <button
                                   onClick={() => handleApprovelvl1(row.id)}
-                                  className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl shadow hover:bg-green-700 transition-all duration-200 focus:outline-none"
+                                  className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl shadow hover:bg-green-700 transition-all duration-200 focus:outline-none hover:border-transparent"
                                 >
                                   <CircleCheck size={16} />
                                   Approve
                                 </button>
                                 <button
                                   onClick={() => handleReject(row.id)}
-                                  className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl shadow hover:bg-red-600 transition-all duration-200 focus:outline-none"
+                                  className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl shadow hover:bg-red-600 transition-all duration-200 focus:outline-none hover:border-transparent"
                                 >
                                   <XCircle size={16} /> Reject
                                 </button>
@@ -304,14 +341,33 @@ export default function RequestList() {
                               <div className="flex justify-left items-center gap-3">
                                 <button
                                   onClick={() => handleApprovelvl2(row.id)}
-                                  className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl shadow hover:bg-green-700 transition-all duration-200 focus:outline-none"
+                                  className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl shadow hover:bg-green-700 transition-all duration-200 focus:outline-none hover:border-transparent"
                                 >
                                   <CircleCheck size={16} />
                                   Approve
                                 </button>
                                 <button
                                   onClick={() => handleReject(row.id)}
-                                  className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl shadow hover:bg-red-600 transition-all duration-200 focus:outline-none"
+                                  className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl shadow hover:bg-red-600 transition-all duration-200 focus:outline-none hover:border-transparent"
+                                >
+                                  <XCircle size={16} /> Reject
+                                </button>
+                              </div>
+                            )}
+                          {/* APPROVER LEVEL 3 → hanya tampil jika sudah approved lvl2 */}
+                          {role === "Approver_3" &&
+                            row.status === "Pending_Approval_3" && (
+                              <div className="flex justify-left items-center gap-3">
+                                <button
+                                  onClick={() => handleApprovelvl3(row.id)}
+                                  className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl shadow hover:bg-green-700 transition-all duration-200 focus:outline-none hover:border-transparent"
+                                >
+                                  <CircleCheck size={16} />
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleReject(row.id)}
+                                  className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl shadow hover:bg-red-600 transition-all duration-200 focus:outline-none hover:border-transparent"
                                 >
                                   <XCircle size={16} /> Reject
                                 </button>

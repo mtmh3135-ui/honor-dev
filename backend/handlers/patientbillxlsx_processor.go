@@ -1,4 +1,4 @@
-package processor
+package handlers
 
 import (
 	"database/sql"
@@ -148,14 +148,22 @@ func insertBatchDynamic(headers []string, batch [][]string) {
 		}
 
 		switch {
-		case strings.ToUpper(status.String) == "FIX" || strings.ToUpper(status.String) == "ON_PROGRESS":
-			// ---- FIX / ON_PROGRESS ----//
+		case strings.ToUpper(status.String) == "APPROVED" || strings.ToUpper(status.String) == "ON_PROGRESS":
+			//hapus data yang sudah ada sebelumnya (hanya jika ditemukan visit number yang sama )
+			_, err = tx.Exec("DELETE FROM patient_bill_update_billing WHERE visit_no = ?", visit)
+			log.Println("Deleted")
+			if err != nil {
+				tx.Rollback()
+				log.Println("Delete existing data failed:", err)
+				return
+			}
+			//insert data ke patient bill update billing
 			insertQuery := fmt.Sprintf(
 				"INSERT INTO patient_bill_update_billing (%s) VALUES (%s)",
 				strings.Join(quotedHeaders, ", "),
 				strings.Join(placeholders, ", "),
 			)
-
+			log.Println("inserted")
 			stmtUpdate, err := tx.Prepare(insertQuery)
 			if err != nil {
 				tx.Rollback()
@@ -182,6 +190,12 @@ func insertBatchDynamic(headers []string, batch [][]string) {
 				}
 			}
 			tx.Commit()
+			// 🔥 Trigger perhitungan honor otomatis
+			go func() {
+				if err := HonorCountUpdateBill(config.DB); err != nil {
+					log.Println("Honor update error:", err)
+				}
+			}()
 			continue
 
 		case !status.Valid || strings.ToUpper(status.String) == "COUNTED":

@@ -480,7 +480,7 @@ const UploadDoctor: React.FC = () => {
             </div>
 
             {/* BUTTON UPLOAD */}
-            <label className="bg-green-500 text-white px-4 py-2 rounded-lg cursor-pointer flex items-center gap-2 hover:bg-green-600">
+            <label className="flex items-center gap-2 bg-gradient-to-r focus:outline-none hover:border-transparent from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200">
               <Upload className="w-4 h-4" />
               Pilih File
               <input
@@ -594,13 +594,13 @@ const UploadDoctor: React.FC = () => {
             </div>
             <button
               onClick={() => setShowAdd(true)}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg focus:outline-none"
+              className="flex items-center gap-2 bg-gradient-to-r focus:outline-none hover:border-transparent from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
             >
               Tambah Txn
             </button>
             <button
               onClick={handleSearch}
-              className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+              className="flex items-center gap-2 bg-gradient-to-r focus:outline-none hover:border-transparent from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
             >
               <Search className="w-4 h-4" /> Search
             </button>

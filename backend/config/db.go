@@ -3,6 +3,7 @@ package config
 import (
 	"database/sql"
 	"log"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -17,6 +18,9 @@ func InitDB() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	DB.SetMaxOpenConns(30)
+	DB.SetMaxIdleConns(30)
+	DB.SetConnMaxLifetime(time.Minute * 5)
 
 	if err := DB.Ping(); err != nil {
 		log.Fatal("DB Ping error:", err)

@@ -108,6 +108,48 @@ func GetDoctor(db *sql.DB) fiber.Handler {
 	}
 }
 
+func GetDoctorList(db *sql.DB) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		DoctorName := c.Query("doctor_name")
+		query := `
+		SELECT 
+			id_doctor,
+			doctor_name,
+			description,
+			careprovider_txn_doctor_id
+		FROM doctor_data
+		WHERE 1=1`
+		args := []interface{}{}
+
+		//filter
+		if DoctorName != "" {
+			query += " AND doctor_name LIKE ?"
+			args = append(args, "%"+DoctorName+"%")
+		}
+		rows, err := db.Query(query, args...)
+
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+		defer rows.Close()
+
+		var result []Doctor
+		for rows.Next() {
+			var p Doctor
+			if err := rows.Scan(&p.IdDoctor, &p.DoctorName, &p.Description, &p.CareproviderTxnDoctorId); err != nil {
+				return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+			}
+			result = append(result, p)
+
+		}
+		log.Printf("data:%v", result)
+		return c.JSON(fiber.Map{
+
+			"data": result,
+		})
+	}
+}
+
 func HandleUploaddoctordata(c *fiber.Ctx) error {
 	if db1 == nil {
 		db1 = config.DB

@@ -22,13 +22,13 @@ const UploadDoctor: React.FC = () => {
   const [addData, setAddData] = useState({
     DoctorName: "",
     Description: "",
-    CareproviderTxnDoctorId: 0,
+    CareproviderTxnDoctorId: "",
   });
   const resetForm = () => {
     setAddData({
       DoctorName: "",
       Description: "",
-      CareproviderTxnDoctorId: 0,
+      CareproviderTxnDoctorId: "",
     });
   };
   const emptyDoctor: Doctor = {
@@ -187,7 +187,7 @@ const UploadDoctor: React.FC = () => {
         {
           DoctorName: addData.DoctorName,
           Description: addData.Description,
-          CareproviderTxnDoctorId: addData.CareproviderTxnDoctorId,
+          CareproviderTxnDoctorId: Number(addData.CareproviderTxnDoctorId),
         },
         { withCredentials: true }
       );
@@ -228,13 +228,13 @@ const UploadDoctor: React.FC = () => {
             />
 
             <input
-              className="border px-3 py-2 w-full mb-3 text-gray-600 bg-transparent focus:outline-none"
-              placeholder="CareproviderTxnDoctorId"
+              placeholder="Careprovider ID"
+              className="placeholder-gray-400 border px-3 py-2 w-full mb-3 text-gray-600 bg-transparent focus:outline-none"
               value={addData.CareproviderTxnDoctorId}
               onChange={(e) =>
                 setAddData({
                   ...addData,
-                  CareproviderTxnDoctorId: Number(e.target.value),
+                  CareproviderTxnDoctorId: e.target.value,
                 })
               }
             />
@@ -326,7 +326,7 @@ const UploadDoctor: React.FC = () => {
             </div>
 
             {/* BUTTON UPLOAD */}
-            <label className="bg-green-500 text-white px-4 py-2 rounded-lg cursor-pointer flex items-center gap-2 hover:bg-green-600">
+            <label className="flex items-center gap-2 bg-gradient-to-r focus:outline-none hover:border-transparent from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200">
               <Upload className="w-4 h-4" />
               Pilih File
               <input
@@ -385,14 +385,14 @@ const UploadDoctor: React.FC = () => {
             />
             <button
               onClick={() => setShowAdd(true)}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg focus:outline-none"
+              className="flex items-center gap-2 bg-gradient-to-r focus:outline-none hover:border-transparent from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
             >
               Tambah Dokter
             </button>
 
             <button
               onClick={handleSearch}
-              className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 focus:outline-none rounded-lg hover:bg-green-700"
+              className="flex items-center gap-2 bg-gradient-to-r focus:outline-none hover:border-transparent from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
             >
               <Search className="w-4 h-4" /> Search
             </button>
@@ -413,9 +413,10 @@ const UploadDoctor: React.FC = () => {
                 <thead className="bg-gradient-to-r from-green-500 to-green-600 text-white sticky top-0">
                   <tr>
                     {[
-                      "Careprovider Txn Doctor Id",
+                      "Doctor ID",
                       "Doctor Name",
                       "Description",
+                      "Profit Share",
                       "Aksi",
                     ].map((head, i) => (
                       <th key={i} className="p-3 text-left font-semibold">
@@ -444,6 +445,7 @@ const UploadDoctor: React.FC = () => {
                         <td className="p-3">{row.CareproviderTxnDoctorId}</td>
                         <td className="p-3">{row.DoctorName}</td>
                         <td className="p-3">{row.Description}</td>
+                        <td className="p-3"></td>
 
                         <td className="p-3 flex gap-2">
                           <button
@@ -477,7 +479,7 @@ const UploadDoctor: React.FC = () => {
                   if (currentPage > 1) fetchData(currentPage - 1);
                 }}
                 disabled={currentPage <= 1}
-                className=" focus:outline-none focus:ring-0 outline-none hover:outline-none px-3 py-1.5 rounded-lg bg-transparent text-gray-500 hover:text-gray-700 disabled:opacity-40 transition-all"
+                className=" focus:outline-none outline-none hover:border-transparent px-3 py-1.5 rounded-lg bg-transparent text-gray-500 hover:text-gray-700 disabled:opacity-40 transition-all"
               >
                 <ChevronLeft />
               </button>
@@ -499,8 +501,8 @@ const UploadDoctor: React.FC = () => {
                       onClick={() => fetchData(page)}
                       className={`px-3 py-1.5 rounded-lg transition-all ${
                         currentPage === page
-                          ? "text-green-400 bg-transparent focus:outline-none focus:ring-0 outline-none"
-                          : "text-gray-400 hover:text-gray-500 bg-transparent"
+                          ? "text-green-400 bg-transparent focus:outline-none hover:border-transparent outline-none"
+                          : "text-gray-400 hover:text-gray-500 bg-transparent hover:border-transparent"
                       }`}
                     >
                       {page}
@@ -514,7 +516,7 @@ const UploadDoctor: React.FC = () => {
                   if (currentPage < totalPages) fetchData(currentPage + 1);
                 }}
                 disabled={currentPage >= totalPages}
-                className="focus:outline-none focus:ring-0 outline-none px-3 py-1.5 rounded-lg bg-transparent text-gray-500 hover:text-gray-700 disabled:opacity-40 transition-all"
+                className="focus:outline-none hover:border-transparent outline-none px-3 py-1.5 rounded-lg bg-transparent text-gray-500 hover:text-gray-700 disabled:opacity-40 transition-all"
               >
                 <ChevronRight />
               </button>

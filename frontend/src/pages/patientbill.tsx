@@ -79,6 +79,7 @@ export default function PatientBill() {
   const [totaldata, settotaldata] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const [filters, setFilters] = useState({
     visit_no: "",
     patient_name: "",
@@ -133,7 +134,6 @@ export default function PatientBill() {
         const start = i * CHUNK_SIZE;
         const end = Math.min(file.size, start + CHUNK_SIZE);
         const chunk = file.slice(start, end);
-
         const form = new FormData();
         form.append("fileId", fileId);
         form.append("chunkIndex", String(i));
@@ -214,7 +214,22 @@ export default function PatientBill() {
       }
     }
   }
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
 
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
   return (
     <>
       {loading && (
@@ -286,7 +301,7 @@ export default function PatientBill() {
                 className="border border-gray-300 focus:ring-2 focus:ring-green-400 p-2 rounded-xl w-60 bg-white/70 backdrop-blur-sm placeholder-gray-400 focus:outline-none"
               />
 
-              <div className="relative w-52 ">
+              <div className="relative w-52 " ref={dropdownRef}>
                 {/* Selected Box */}
                 <button
                   type="button"
@@ -346,7 +361,7 @@ export default function PatientBill() {
             {/* Search Button */}
             <button
               onClick={handleSearch}
-              className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
+              className="flex items-center gap-2 hover:border-transparent focus:outline-none bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
             >
               <Search className="w-4 h-4" />
               Search

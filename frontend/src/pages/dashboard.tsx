@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import {
   CartesianGrid,
@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Typewriter } from "react-simple-typewriter";
 import Swal from "sweetalert2";
 import { ChevronDown, ChevronLeft, ChevronRight, Search } from "lucide-react";
@@ -73,15 +73,6 @@ function FuturisticHeader() {
           />
         </motion.p>
 
-        {/* Premium Line Accent */}
-        <motion.div
-          initial={{ scaleX: 0 }}
-          animate={{ scaleX: 1 }}
-          transition={{ duration: 0.7, ease: "easeIn", delay: 0.4 }}
-          className="mx-auto mt-5 w-96 h-[3px] bg-gradient-to-r from-green-600 to-emerald-400 rounded-full origin-left"
-          style={{ animation: "breathing 4s ease-in-out infinite" }}
-        />
-
         <style>
           {`
 @keyframes breathing {
@@ -105,6 +96,9 @@ export default function Dashboard() {
   const [totalPages, setTotalPages] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const currentYear = new Date().getFullYear();
+  const monthRef = useRef<HTMLDivElement>(null);
+  const yearRef = useRef<HTMLDivElement>(null);
+  const chartYearRef = useRef<HTMLDivElement>(null);
 
   const [lineData, setLineData] = useState([]);
   const years = Array.from({ length: 4 }, (_, i) => currentYear - i);
@@ -112,6 +106,7 @@ export default function Dashboard() {
   const [isOpen, setIsOpen] = useState(false);
   const [isOpena, setIsOpena] = useState(false);
   const [isOpenb, setIsOpenb] = useState(false);
+
   const months = [
     { label: "Januari", value: 1 },
     { label: "Februari", value: 2 },
@@ -141,7 +136,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchDoctors = async () => {
-      const res = await axios.get("http://localhost:8080/api/get-doctor-data", {
+      const res = await axios.get("http://localhost:8080/api/get-doctor-list", {
         withCredentials: true,
       });
       setDoctorList(
@@ -170,6 +165,25 @@ export default function Dashboard() {
       console.log("Error fetching chart:", err);
     }
   };
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (monthRef.current && !monthRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+      if (yearRef.current && !yearRef.current.contains(e.target as Node)) {
+        setIsOpena(false);
+      }
+      if (
+        chartYearRef.current &&
+        !chartYearRef.current.contains(e.target as Node)
+      ) {
+        setIsOpenb(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Auto reload setiap kali doctor/year berubah
   useEffect(() => {
@@ -212,7 +226,7 @@ export default function Dashboard() {
     fetchData(1);
   };
   return (
-    <div className="ml-64 mt-12 p-8 min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 focus:outline-none">
+    <div className="ml-64 mt-12 p-8 min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100  focus:outline-none">
       <FuturisticHeader />
       <div className="xl:col-span-2 bg-white p-6 rounded-2xl shadow">
         <div className="flex items-center justify-between gap-4">
@@ -255,29 +269,38 @@ export default function Dashboard() {
               />
 
               {/* Dropdown */}
-              {showDropdown && (
-                <div className="absolute top-full left-0 w-full bg-white text-gray-600 shadow-lg rounded-xl mt-1 max-h-48 overflow-y-auto z-10 border border-gray-200">
-                  {filteredDoctors.length === 0 ? (
-                    <div className="p-2 text-gray-400 text-sm">
-                      Tidak ditemukan
+              <AnimatePresence>
+                {showDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <div className="absolute top-full left-0 w-full bg-white text-gray-600 shadow-lg rounded-xl mt-1 max-h-48 overflow-y-auto z-10 border border-gray-200 custom-scrollbar">
+                      {filteredDoctors.length === 0 ? (
+                        <div className="p-2 text-gray-400 text-sm">
+                          Tidak ditemukan
+                        </div>
+                      ) : (
+                        filteredDoctors.map((d: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className="p-2 cursor-pointer hover:bg-green-50 transition"
+                            onClick={() => {
+                              setDoctor(d.name);
+                              setSelectedDoctor(d.name);
+                              setShowDropdown(false);
+                            }}
+                          >
+                            {d.name}
+                          </div>
+                        ))
+                      )}
                     </div>
-                  ) : (
-                    filteredDoctors.map((d: any, idx: number) => (
-                      <div
-                        key={idx}
-                        className="p-2 cursor-pointer hover:bg-green-50 transition"
-                        onClick={() => {
-                          setDoctor(d.name);
-                          setSelectedDoctor(d.name);
-                          setShowDropdown(false);
-                        }}
-                      >
-                        {d.name}
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
             {/* Tombol Clear */}
             {doctorname !== "" && (
@@ -295,8 +318,7 @@ export default function Dashboard() {
               </button>
             )}
             {/* Year Selector */}
-
-            <div className="relative w-52">
+            <div className="relative w-52" ref={chartYearRef}>
               <button
                 type="button"
                 onClick={() => setIsOpenb(!isOpenb)}
@@ -316,27 +338,35 @@ export default function Dashboard() {
                   }`}
                 />
               </button>
-
-              {isOpenb && (
-                <div className="absolute text-gray-600 z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg animate-fadeIn backdrop-blur-md">
-                  {years.map((y) => (
-                    <div
-                      key={y}
-                      onClick={() => {
-                        setYear(String(y)); // update year utama
-                        setIsOpena(false);
-                      }}
-                      className={`px-4 py-2 cursor-pointer transition-all duration-200 hover:bg-green-50 hover:text-green-600 ${
-                        selectedYear == y
-                          ? "bg-green-100 text-green-700 font-semibold"
-                          : ""
-                      }`}
-                    >
-                      {y}
+              <AnimatePresence>
+                {isOpenb && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <div className="absolute text-gray-600 z-10 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg animate-fadeIn backdrop-blur-md">
+                      {years.map((y) => (
+                        <div
+                          key={y}
+                          onClick={() => {
+                            setYear(String(y)); // update year utama
+                            setIsOpenb(false);
+                          }}
+                          className={`px-4 py-2 cursor-pointer transition-all duration-200 hover:bg-green-50 hover:text-green-600 ${
+                            selectedYear == y
+                              ? "bg-green-100 text-green-700 font-semibold"
+                              : ""
+                          }`}
+                        >
+                          {y}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>
@@ -382,7 +412,7 @@ export default function Dashboard() {
             />
 
             {/* Month Dropdown */}
-            <div className="relative w-52">
+            <div className="relative w-52" ref={monthRef}>
               <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
@@ -430,7 +460,7 @@ export default function Dashboard() {
             </div>
 
             {/* Year Dropdown */}
-            <div className="relative w-52">
+            <div className="relative w-52" ref={yearRef}>
               <button
                 type="button"
                 onClick={() => setIsOpena(!isOpena)}
@@ -474,7 +504,7 @@ export default function Dashboard() {
           <div className="flex justify-between gap-2">
             <button
               onClick={handleSearch}
-              className="flex items-center gap-2 bg-gradient-to-r focus:outline-none from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
+              className="flex items-center gap-2 hover:border-transparent bg-gradient-to-r focus:outline-none from-green-500 to-green-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
             >
               <Search className="w-4 h-4" /> Search
             </button>

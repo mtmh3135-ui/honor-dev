@@ -1,31 +1,140 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { X } from "lucide-react";
+import { CircleCheck, X, XCircle } from "lucide-react";
 import axios from "axios";
+import Swal from "sweetalert2";
 
 export default function HonorRequestDetail() {
   const { id } = useParams();
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const [role, setRole] = useState<string>("");
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   useEffect(() => {
-    fetchDetail();
+    fetchData();
   }, [id]);
 
-  const fetchDetail = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
       const res = await axios.get(
         `http://localhost:8080/api/request-list/${id}`,
         { withCredentials: true }
       );
-
+      setRole(res.data.role);
       setDetail(res.data);
     } catch (err) {
       console.error("Gagal memuat detail:", err);
       setDetail(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReject = async (id: number) => {
+    const confirm = await Swal.fire({
+      title: "Tolak Permohonan?",
+      text: "Permohonan yang akan ditolak dan tidak dapat dipulihkan.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Ya, Tolak!",
+    });
+
+    if (!confirm.isConfirmed) return;
+    setLoading(true);
+    await new Promise((r) => setTimeout(r, 50));
+    try {
+      await axios.put(
+        `http://localhost:8080/api/honor-request/reject/${id}`,
+        {},
+        { withCredentials: true }
+      );
+
+      Swal.fire("Dibatalkan", "Permohonan berhasil dibatalkan.", "success");
+      navigate(`/request-list`);
+      fetchData();
+    } catch (err: any) {
+      Swal.fire(
+        "Error",
+        err.response?.data?.error || "Gagal membatalkan permohonan.",
+        "error"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprovelvl1 = async (id: number) => {
+    setLoading(true);
+    try {
+      await axios.put(
+        `http://localhost:8080/api/honor/approve/1/${id}`,
+        {},
+        { withCredentials: true }
+      );
+
+      Swal.fire("Approved", "Permohonan berhasil di setujui.", "success");
+      navigate(`/request-list`);
+      fetchData();
+    } catch (err: any) {
+      setLoading(false);
+      Swal.fire(
+        "Error",
+        err.response?.data?.error || "Gagal Setujui Permohonan.",
+        "error"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprovelvl2 = async (id: number) => {
+    setLoading(true);
+    try {
+      await axios.put(
+        `http://localhost:8080/api/honor/approve/2/${id}`,
+        {},
+        { withCredentials: true }
+      );
+
+      Swal.fire("Approved", "Permohonan berhasil di setujui.", "success");
+      navigate(`/request-list`);
+      fetchData();
+    } catch (err: any) {
+      setLoading(false);
+      Swal.fire(
+        "Error",
+        err.response?.data?.error || "Gagal Setujui Permohonan.",
+        "error"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprovelvl3 = async (id: number) => {
+    setLoading(true);
+    try {
+      await axios.put(
+        `http://localhost:8080/api/honor/approve/3/${id}`,
+        {},
+        { withCredentials: true }
+      );
+
+      Swal.fire("Approved", "Permohonan berhasil di setujui.", "success");
+      navigate(`/request-list`);
+      fetchData();
+    } catch (err: any) {
+      setLoading(false);
+      Swal.fire(
+        "Error",
+        err.response?.data?.error || "Gagal Setujui Permohonan.",
+        "error"
+      );
     } finally {
       setLoading(false);
     }
@@ -76,14 +185,86 @@ export default function HonorRequestDetail() {
         <h2 className="text-2xl font-bold mb-2 text-gray-600">
           Detail Permohonan Honor
         </h2>
-        <button
-          className="bg-transparent text-red-600 focus:outline-none"
-          onClick={() => {
-            navigate(`/request-list`);
-          }}
-        >
-          <X></X>
-        </button>
+
+        <div className="flex justify-between gap-2">
+          {/* HANDLING ADMIN */}
+          {role === "Admin" && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => handleReject(detail.request.id)}
+                className="flex items-center gap-2 bg-transparent border-red-500 text-gray-600 px-4 py-2 rounded-xl shadow hover:bg-red-500 transition-all duration-200 focus:outline-none"
+              >
+                <XCircle size={16} /> Reject
+              </button>
+            </div>
+          )}
+          {/* APPROVER LEVEL 1 */}
+          {role === "Approver_1" &&
+            detail.request.status === "Pending_Approval_1" && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handleApprovelvl1(detail.request.id)}
+                  className="flex items-center gap-2 bg-transparent border-green-600 text-green-600 hover:text-white px-4 py-2 rounded-xl shadow hover:bg-green-500 transition-all duration-200 focus:outline-none hover:border-transparent"
+                >
+                  <CircleCheck size={16} />
+                  Approve
+                </button>
+                <button
+                  onClick={() => handleReject(detail.request.id)}
+                  className="flex items-center gap-2 bg-transparent border-red-500 text-red-600 hover:text-white px-4 py-2 rounded-xl shadow hover:bg-red-500 transition-all duration-200 focus:outline-none hover:border-transparent"
+                >
+                  <XCircle size={16} /> Reject
+                </button>
+              </div>
+            )}
+
+          {/* APPROVER LEVEL 2 → hanya tampil jika sudah approved lvl1 */}
+          {role === "Approver_2" &&
+            detail.request.status === "Pending_Approval_2" && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handleApprovelvl2(detail.request.id)}
+                  className="flex items-center gap-2 bg-transparent border-green-600 text-green-600 hover:text-white px-4 py-2 rounded-xl shadow hover:bg-green-500 transition-all duration-200 focus:outline-none hover:border-transparent"
+                >
+                  <CircleCheck size={16} />
+                  Approve
+                </button>
+                <button
+                  onClick={() => handleReject(detail.request.id)}
+                  className="flex items-center gap-2 bg-transparent border-red-500 text-red-600 hover:text-white px-4 py-2 rounded-xl shadow hover:bg-red-500 transition-all duration-200 focus:outline-none hover:border-transparent"
+                >
+                  <XCircle size={16} /> Reject
+                </button>
+              </div>
+            )}
+          {/* APPROVER LEVEL 3 → hanya tampil jika sudah approved lvl2 */}
+          {role === "Approver_3" &&
+            detail.request.status === "Pending_Approval_3" && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handleApprovelvl3(detail.request.id)}
+                  className="flex items-center gap-2 bg-transparent border-green-600 text-green-600 hover:text-white px-4 py-2 rounded-xl shadow hover:bg-green-500 transition-all duration-200 focus:outline-none hover:border-transparent"
+                >
+                  <CircleCheck size={16} />
+                  Approve
+                </button>
+                <button
+                  onClick={() => handleReject(detail.request.id)}
+                  className="flex items-center gap-2 bg-transparent border-red-500 text-red-600 hover:text-white px-4 py-2 rounded-xl shadow hover:bg-red-500 transition-all duration-200 focus:outline-none hover:border-transparent"
+                >
+                  <XCircle size={16} /> Reject
+                </button>
+              </div>
+            )}
+          <button
+            className="bg-transparent text-red-400 focus:outline-none hover:border-transparent hover:text-red-500"
+            onClick={() => {
+              navigate(`/request-list`);
+            }}
+          >
+            <X>Back</X>
+          </button>
+        </div>
       </div>
 
       {/* ===== TABLE DOCTOR SUMMARY ===== */}
@@ -110,7 +291,7 @@ export default function HonorRequestDetail() {
                       onClick={() =>
                         setOpenIndex(openIndex === index ? null : index)
                       }
-                      className="px-3 py-1 bg-green-500 text-white rounded-md text-sm focus:outline-none"
+                      className="px-3 py-1 bg-green-500 text-white rounded-md text-sm focus:outline-none hover:border-transparent"
                     >
                       {openIndex === index ? "Tutup" : "Lihat"}
                     </button>
@@ -124,8 +305,14 @@ export default function HonorRequestDetail() {
                       <table className="w-full text-sm border border-gray-300 rounded-lg overflow-hidden">
                         <thead>
                           <tr className="bg-green-500 text-white">
-                            <th className="p-2 border">Visit No</th>
-                            <th className="p-2 border">Txn Code</th>
+                            <th className="p-2 border"> </th>
+                            <th className="p-2 border">Masuk</th>
+                            <th className="p-2 border">Keluar</th>
+                            <th className="p-2 border">Nomor RM</th>
+                            <th className="p-2 border">Visit Number</th>
+                            <th className="p-2 border">Nama Pasien</th>
+                            <th className="p-2 border">Company</th>
+                            <th className="p-2 border">Deskripsi</th>
                             <th className="p-2 border">Honor</th>
                           </tr>
                         </thead>
@@ -136,8 +323,16 @@ export default function HonorRequestDetail() {
                                 key={`${vi}-${ii}`}
                                 className="border text-gray-600"
                               >
+                                <td className="p-2 border">
+                                  {item.patient_type}
+                                </td>
+                                <td className="p-2 border">{item.masuk}</td>
+                                <td className="p-2 border">{item.keluar}</td>
+                                <td className="p-2 border">{item.nrm}</td>
                                 <td className="p-2 border">{v.visit_no}</td>
-                                <td className="p-2 border">{item.txn_code}</td>
+                                <td className="p-2 border">{item.pasien}</td>
+                                <td className="p-2 border">{item.company}</td>
+                                <td className="p-2 border">{item.txn_desc}</td>
                                 <td className="p-2 border text-right">
                                   Rp {item.honor.toLocaleString("id-ID")}
                                 </td>
