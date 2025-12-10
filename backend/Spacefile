@@ -1,0 +1,8 @@
+name: Honor Backend
+type: api
+runtime: go1.x
+src: .
+run: ./app
+build:
+  - go mod tidy
+  - go build -o app .
